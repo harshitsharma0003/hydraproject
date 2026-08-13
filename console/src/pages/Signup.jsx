@@ -6,7 +6,6 @@ export default function Signup() {
   const [form, setForm] = useState({ email: '', password: '', company: '',
                                      platform: 'sfcc_sfra' });
   const [error, setError] = useState('');
-  const [keys, setKeys] = useState(null);
   const [busy, setBusy] = useState(false);
   const [params] = useSearchParams();
   const nav = useNavigate();
@@ -24,32 +23,11 @@ export default function Signup() {
       return setError(r?.error === 'email_taken'
         ? 'That email already has an account.' : 'Could not create the account.');
     }
+    // No keys are handed out at signup. Drop the user straight into the console,
+    // where the Get-started checklist walks them through generating keys,
+    // adding environments and connecting their storefront.
     localStorage.setItem('algivo_token', r.token);
-    setKeys(r.keys);
-  }
-
-  // Keys are shown exactly once - they are stored hashed and cannot be
-  // recovered, only rotated. So this screen blocks until acknowledged.
-  if (keys) {
-    return (
-      <div className="login">
-        <div className="panel">
-          <h1>Your sandbox is ready</h1>
-          <p className="muted">
-            Copy these now. They are stored hashed and cannot be shown again.
-          </p>
-          <label>Publishable key<code>{keys.publishableKey}</code></label>
-          <label>Secret key<code>{keys.secretKey}</code></label>
-          <p className="muted">
-            Paste them into your sandbox instance. Production keys are issued
-            when you choose a plan.
-          </p>
-          <button onClick={() => nav(params.get('plan') ? '/billing' : '/')}>
-            Continue
-          </button>
-        </div>
-      </div>
-    );
+    nav(params.get('plan') ? '/billing' : '/');
   }
 
   return (

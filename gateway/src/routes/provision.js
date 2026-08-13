@@ -16,7 +16,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
 async function provision({ name, platform, externalSiteId, tier = 'starter',
                            environment = 'production',
                            stripeCustomerId = null, stripeSubId = null,
-                           allowedOrigins = [] }) {
+                           allowedOrigins = [], issueKeys = true }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -43,19 +43,26 @@ async function provision({ name, platform, externalSiteId, tier = 'starter',
        VALUES ($1,$2,$3,$4,$5) RETURNING id`,
       [tenant.id, externalSiteId, platform, allowedOrigins, environment]);
 
-    const pk = issueKey('publishable');
-    const sk = issueKey('secret');
-    for (const [k, kind] of [[pk, 'publishable'], [sk, 'secret']]) {
-      await client.query(
-        `INSERT INTO api_keys (tenant_id, site_id, kind, prefix, key_hash)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [tenant.id, site.id, kind, k.prefix, k.hash]);
+    // Shopify OAuth and Stripe purchases want keys issued immediately (there is
+    // no console session to click "generate"). A console signup passes
+    // issueKeys:false so the new user generates their own keys in the console —
+    // arriving to pre-made keys you never saw is confusing and looks unfinished.
+    let publishableKey = null, secretKey = null;
+    if (issueKeys) {
+      const pk = issueKey('publishable');
+      const sk = issueKey('secret');
+      for (const [k, kind] of [[pk, 'publishable'], [sk, 'secret']]) {
+        await client.query(
+          `INSERT INTO api_keys (tenant_id, site_id, kind, prefix, key_hash)
+           VALUES ($1,$2,$3,$4,$5)`,
+          [tenant.id, site.id, kind, k.prefix, k.hash]);
+      }
+      publishableKey = pk.full; secretKey = sk.full;
     }
 
     await client.query('COMMIT');
     // Full key values are returned exactly once and never stored in plaintext.
-    return { tenantId: tenant.id, siteId: site.id,
-             publishableKey: pk.full, secretKey: sk.full };
+    return { tenantId: tenant.id, siteId: site.id, publishableKey, secretKey };
   } catch (e) {
     await client.query('ROLLBACK');
     throw e;

@@ -42,7 +42,9 @@ router.post('/signup', async (req, res) => {
     platform,
     externalSiteId: `sandbox-${Date.now()}`,
     tier: 'trial',
-    environment: 'sandbox'
+    environment: 'sandbox',
+    // The user generates their own keys from the console after signing in.
+    issueKeys: false
   });
 
   await pool.query(
@@ -71,13 +73,44 @@ router.post('/signup', async (req, res) => {
     console.error('[signup] welcome email failed (non-fatal):', e.message);
   }
 
-  // Keys are returned exactly once. They are stored hashed and cannot be
-  // recovered afterwards - only rotated.
-  res.json({ ok: true, token, keys: {
-    environment: 'sandbox',
-    publishableKey: result.publishableKey,
-    secretKey: result.secretKey
-  }});
+  // No keys are issued here anymore — the console's Get-started flow walks the
+  // new user through generating them. Just sign them in.
+  res.json({ ok: true, token });
+});
+
+/* ------------------------------------------------------------------ *
+ * Add an environment (UAT / an extra production storefront) to the
+ * signed-in tenant. Non-production is unique per platform at the DB level
+ * (sites_one_nonprod_per_platform), so a second UAT is refused cleanly.
+ * No keys are issued — the user generates them per environment.
+ * ------------------------------------------------------------------ */
+router.post('/environments', requireConsole, rbac.require('sites:write'), async (req, res) => {
+  const { environment } = req.body || {};
+  if (!['uat', 'production'].includes(environment)) {
+    return res.status(400).json({ ok: false, error: 'invalid_environment' });
+  }
+
+  // Inherit the platform from the tenant's first site so the new environment
+  // matches (a tenant is single-platform in practice).
+  const { rows: [seed] } = await pool.query(
+    'SELECT platform FROM sites WHERE tenant_id=$1 LIMIT 1', [req.user.tenant_id]);
+  const platform = seed?.platform || 'sfcc_sfra';
+
+  try {
+    const { rows: [site] } = await pool.query(
+      `INSERT INTO sites (tenant_id, external_site_id, platform, environment)
+       VALUES ($1,$2,$3,$4) RETURNING id`,
+      [req.user.tenant_id, `${environment}-${Date.now()}`, platform, environment]);
+    rbac.audit(req, 'environment.created',
+      { targetType: 'site', targetId: site.id, siteId: site.id, detail: { environment } });
+    res.json({ ok: true, siteId: site.id, environment });
+  } catch (e) {
+    if (e.code === '23505') {
+      return res.status(409).json({ ok: false, error: 'environment_exists' });
+    }
+    console.error('[environments] create failed:', e.message);
+    res.status(500).json({ ok: false, error: 'create_failed' });
+  }
 });
 
 /* ------------------------------------------------------------------ *

@@ -28,6 +28,8 @@ export const api = {
     call('/api/console/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   signup:  (b) => call('/api/signup', { method: 'POST', body: JSON.stringify(b) }),
   environments: () => call('/api/environments'),
+  createEnvironment: (environment) =>
+    call('/api/environments', { method: 'POST', body: JSON.stringify({ environment }) }),
   rotateKey: (siteId, kind) =>
     call('/api/keys/rotate', { method: 'POST', body: JSON.stringify({ siteId, kind }) }),
   flushCache: (siteId) =>

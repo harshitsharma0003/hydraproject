@@ -109,6 +109,28 @@ button.link { background:none; color:var(--accent); padding:0; text-align:left; 
 .dialog p { margin:0 0 18px; }
 .dialog-actions { display:flex; gap:12px; justify-content:flex-end; align-items:center; }
 
+/* onboarding "Get started" checklist */
+.ob { border:1px solid var(--line); border-radius:14px; padding:20px 22px; margin:16px 0 24px;
+      background:linear-gradient(180deg,#f6f5fd,#fff); }
+.ob-head { display:flex; justify-content:space-between; align-items:flex-start; }
+.ob-head h2 { margin:0 0 2px; }
+.ob-progress { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin:14px 0 4px; }
+.ob-progress > div { height:100%; background:var(--accent); border-radius:3px; transition:width .3s ease; }
+.ob-steps { list-style:none; margin:12px 0 0; padding:0; display:flex; flex-direction:column; gap:8px; }
+.ob-steps li { display:flex; align-items:center; gap:14px; padding:12px 14px; background:#fff;
+      border:1px solid var(--line); border-radius:10px; }
+.ob-steps li.done { opacity:.62; }
+.ob-mark { flex:none; display:grid; place-items:center; width:26px; height:26px; border-radius:999px;
+      background:#efeef9; color:var(--accent); font-size:13px; font-weight:600; }
+.ob-steps li.done .ob-mark { background:#e1f5ee; color:#0f6e56; }
+.ob-body { flex:1; }
+.ob-body strong { font-weight:600; font-size:14.5px; }
+.ob-body p { margin:2px 0 0; }
+.ob-steps li button { flex:none; }
+.tab.add { color:var(--accent); border:1px dashed var(--line); border-bottom:1px dashed var(--line);
+      border-radius:8px; margin-left:6px; }
+.tab.add:hover { background:#f6f5fd; }
+
 /* ================================================================== *
  * Marketing homepage (Landing). Self-contained under .lp so it never
  * collides with the console's own classes.
