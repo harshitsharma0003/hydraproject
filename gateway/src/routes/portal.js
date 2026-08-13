@@ -90,6 +90,20 @@ router.post('/environments', requireConsole, rbac.require('sites:write'), async 
     return res.status(400).json({ ok: false, error: 'invalid_environment' });
   }
 
+  // Non-sandbox environments are a paid feature. A free trial gets a sandbox
+  // only; production needs any paid plan, UAT needs Growth or above — matching
+  // the tiers advertised on the pricing page. Gate it here, server-side, so the
+  // UI hiding the buttons is defence-in-depth, not the only check.
+  const { rows: [lic] } = await pool.query(
+    'SELECT tier FROM licenses WHERE tenant_id=$1 LIMIT 1', [req.user.tenant_id]);
+  const tier = lic?.tier || 'trial';
+  const permitted = environment === 'production'
+    ? tier !== 'trial'
+    : ['growth', 'enterprise'].includes(tier);   // uat
+  if (!permitted) {
+    return res.status(402).json({ ok: false, error: 'upgrade_required' });
+  }
+
   // Inherit the platform from the tenant's first site so the new environment
   // matches (a tenant is single-platform in practice).
   const { rows: [seed] } = await pool.query(

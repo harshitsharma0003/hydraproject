@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useToast } from '../Toast';
 
@@ -13,6 +14,7 @@ const ENV_NOTE = {
 
 export default function Environments() {
   const { notify, confirm } = useToast();
+  const nav = useNavigate();
   const [data, setData] = useState(null);
   const [active, setActive] = useState(null);
   const [revealed, setRevealed] = useState([]);
@@ -54,6 +56,13 @@ export default function Environments() {
   const hasBothKeys = !!keyFor('publishable') && !!keyFor('secret');
   const hasUat = envs.some((e) => e.environment === 'uat');
   const connected = !!env.last_sync_at || masters > 0 || !!env.sftp_username;
+
+  // UAT and production are paid: a free trial gets a sandbox only. Production
+  // needs any paid plan; UAT needs Growth or above (matches the pricing page).
+  const tier = data.license?.tier || 'trial';
+  const paid = tier !== 'trial';
+  const canUat = ['growth', 'enterprise'].includes(tier);
+  const canProduction = paid;
 
   async function issue(kind) {
     const existing = !!keyFor(kind);
@@ -111,9 +120,13 @@ export default function Environments() {
     { done: hasBothKeys, title: 'Generate your API keys',
       desc: 'A publishable key for the storefront and a secret key for server calls. Each is shown once.',
       action: !hasBothKeys && { label: 'Generate keys', fn: generateBoth } },
-    { done: hasUat, title: 'Add a UAT environment',
-      desc: 'A staging environment with its own keys and quota, never billed — so QA never eats production allowance.',
-      action: !hasUat && { label: 'Add UAT', fn: () => addEnvironment('uat') } },
+    paid
+      ? { done: hasUat || !canUat, title: 'Add a UAT environment',
+          desc: 'A staging environment with its own keys and quota, never billed — so QA never eats production allowance.',
+          action: canUat && !hasUat && { label: 'Add UAT', fn: () => addEnvironment('uat') } }
+      : { done: false, title: 'Unlock UAT & production',
+          desc: 'Your sandbox is free forever. UAT and production environments come with a paid plan.',
+          action: { label: 'See plans', fn: () => nav('/billing') } },
     { done: connected, title: 'Connect your storefront',
       desc: 'Install the cartridge (SFCC) or the app (Shopify), paste the keys above, and point it at your gateway URL.' },
     { done: masters > 0, title: 'Sync your catalog',
@@ -162,12 +175,18 @@ export default function Environments() {
             {e.billable && <span className="dot" title="Billed" />}
           </button>
         ))}
-        {!hasUat && (
+        {canUat && !hasUat && (
           <button className="tab add" disabled={busy}
                   onClick={() => addEnvironment('uat')} title="Create a UAT environment">＋ UAT</button>
         )}
-        <button className="tab add" disabled={busy}
-                onClick={() => addEnvironment('production')} title="Create a production environment">＋ Production</button>
+        {canProduction && (
+          <button className="tab add" disabled={busy}
+                  onClick={() => addEnvironment('production')} title="Create a production environment">＋ Production</button>
+        )}
+        {!paid && (
+          <button className="tab add lock" onClick={() => nav('/billing')}
+                  title="Upgrade to add UAT and production">🔒 Add environments</button>
+        )}
       </div>
 
       <p className="muted">{ENV_NOTE[env.environment]}</p>
