@@ -101,6 +101,28 @@ router.get('/console/syncs', requireConsole, async (req, res) => {
   res.json({ ok: true, jobs: rows.rows });
 });
 
+/**
+ * Sandbox caches never expire, which is exactly wrong while someone is
+ * iterating on prompts or catalog data. This is the escape hatch.
+ */
+router.post('/console/cache/flush', requireConsole, async (req, res) => {
+  const { siteId } = req.body || {};
+  const { rows: [site] } = await pool.query(
+    'SELECT id, environment FROM sites WHERE id=$1 AND tenant_id=$2',
+    [siteId, req.console.tenantId]);
+  if (!site) return res.status(404).json({ ok: false });
+
+  const { rows: [r] } = await pool.query('SELECT cache_flush($1) AS n', [siteId]);
+  res.json({ ok: true, flushed: Number(r.n), environment: site.environment });
+});
+
+router.get('/console/environments', requireConsole, async (req, res) => {
+  const rows = await withTenant(req.console.tenantId, (c) => c.query(
+    `SELECT * FROM environment_cost WHERE tenant_id=$1
+      ORDER BY period DESC, environment`, [req.console.tenantId]));
+  res.json({ ok: true, environments: rows.rows });
+});
+
 router.get('/console/usage', requireConsole, async (req, res) => {
   const rows = await withTenant(req.console.tenantId, (c) => c.query(
     `SELECT period, sum(queries_total) AS queries, sum(queries_cached) AS cached,

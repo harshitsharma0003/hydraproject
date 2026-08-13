@@ -1,87 +1,97 @@
-# Hydra — platform
+# Hydra Platform (internal)
 
-The backend, database and merchant console for Hydra AI merchandising.
-Everything runs on a single VM: PostgreSQL + pgvector, SFTP catalog drop,
-gateway API, two background workers, and the console.
+The backend, database and merchant console. This package is **not** shipped to
+customers.
 
-The storefront packages (SFCC cartridge, Shopify app) live separately — this
-repo is the brain they talk to.
+```
+db/          Postgres schema + Supabase setup
+gateway/     The brain: intent parsing, retrieval, ranking, metering
+console/     Merchant-facing UI (one console, both platforms)
+```
 
 ---
 
-## Install on a fresh VM
-
-Ubuntu 22.04 or 24.04, 4 vCPU / 8 GB RAM minimum.
+## Quick start
 
 ```bash
-sudo apt update && sudo apt install -y git
-git clone https://github.com/harshitsharma0003/hydraproject.git /tmp/hydra
-sudo bash /tmp/hydra/setup/install.sh \
-  --domain hydra.yourdomain.com --email ops@yourdomain.com
+cp .env.example .env          # fill in DATABASE_URL, ANTHROPIC_API_KEY, VOYAGE_API_KEY
+psql "$DATABASE_URL" -f db/migrations/0001_init.sql
+
+cd gateway && npm install && npm start     # :8080
+cd ../console && npm install && npm run dev # :5173
 ```
-
-The installer clones this repo to `/opt/hydra`, so redeploys are:
-
-```bash
-sudo hydra-update
-```
-
-Full detail: [`setup/README.md`](setup/README.md).
 
 ---
 
-## Layout
+## Two model providers, not one
 
-```
-db/migrations/    schema — 0001 core, 0002 bulk ingest
-gateway/src/      API, intent parsing, retrieval, workers
-console/          merchant-facing React SPA
-setup/            VM installer and operations guide
-```
+Claude handles intent parsing and narration. **Anthropic does not offer an
+embeddings endpoint** — their documentation points to Voyage AI for Claude
+pairings, so a second vendor is required for vectors.
 
-## The request path
+This is not a problem, just a line item that nobody mentions until integration
+week. `gateway/src/embeddings.js` keeps it behind an interface so swapping to a
+self-hosted model later is a config change, and `embed_model` is stored on every
+product row so you know exactly what needs re-embedding after an upgrade.
+
+---
+
+## Request path
 
 ```
 POST /v1/query
-  auth (publishable key, origin-locked) -> rate limit -> quota
-  cache lookup                             ~70% hit rate in steady state
-  Claude intent parse (on miss)            taxonomy under prompt caching
-  hybrid retrieval                         one SQL pass, RRF fusion
-  widening ladder                          relax until the result floor clears
+  auth (publishable key, origin-locked)
+  quota check ......................... soft-fail, never a hard cutoff
+  cache lookup ........................ ~70% hit rate in steady state
+  Claude intent parse (on miss) ....... taxonomy under prompt caching
+  hybrid retrieval .................... one SQL pass, RRF fusion
+  widening ladder ..................... relax until the floor clears
+  issue token
   -> { token, masterIds, intent, relaxed }
 ```
 
-The gateway returns **product IDs, never products and never prices**. The
-storefront hydrates them inside the shopper's own session, so price book,
-customer group and active promotions all resolve correctly.
-
-## Bulk ingest
-
-```
-storefront  -> /v1/bulk/begin        opens a job, returns an SFTP drop path
-            -> chunk-00001.ndjson.gz gzipped NDJSON, 20k rows each
-            -> manifest.json LAST    the trigger
-hydra-ingest -> checksums, COPY into staging, promote
-hydra-embed  -> claims batches, writes vectors, closes the job
-```
-
-Nothing ingests until the manifest lands, so an interrupted upload leaves the
-live index untouched. Existing embeddings are replaced one batch at a time — a
-resync never blanks the index mid-flight.
+The gateway returns **IDs, never products and never prices**. The storefront
+hydrates them in the shopper's own session, so price book, customer group and
+active promotions all resolve correctly.
 
 ---
 
-## Status
+## Endpoints
 
-The core engine is built. **None of it has been executed against a live
-database or API.** Read [`MANUAL-STEPS.md`](MANUAL-STEPS.md) Part B before
-deploying — it ranks every unverified item.
+| Route | Key | Purpose |
+|---|---|---|
+| `POST /v1/query` | publishable | Resolve intent, return token + ranked IDs |
+| `POST /v1/refine` | publishable | Chip click / follow-up with prior intent |
+| `POST /v1/event` | either | Attribution beacon, erasure requests |
+| `POST /v1/sync` | secret | Catalog ingest, content-hash delta embedding |
+| `POST /v1/discover` | secret | Auto-discovery intake, builds taxonomy prompt |
+| `POST /api/console/*` | JWT | Console: rules, queries, usage |
 
-Known gaps, in rough priority order:
+---
 
-- `intent.chips` is consumed by both storefronts but never produced
-- `visitor_profiles` exists; nothing writes it (no personalisation yet)
-- `gift_buckets` layout is emitted by the parser with no renderer
-- `NARRATION_MODEL` is configured and never called
-- No email, no purchase funnel, no internal admin
-- No tests
+## Cost controls already in place
+
+- Content-hash delta embedding — 1–3% of catalog re-embedded per night, not 100%
+- Master-level embedding with variant rollup — roughly 4–20× fewer vectors
+- `halfvec` float16 — halves index RAM, no measurable ranking loss
+- Normalised query cache — the single highest-ROI component
+- Narration tier-gated — it roughly doubles per-query model cost
+- Per-tenant cost telemetry in `usage_meter` — know your real gross margin
+  before renewal, not after
+
+---
+
+> **Read `MANUAL-STEPS.md` first.** Nothing in this package has been executed —
+> no database provisioned, no API called. Part B of that document lists every
+> unverified item in priority order, including one that will break every query
+> on a site if a merchandiser enters a boost multiplier of zero.
+
+## Before production
+
+- [ ] Run the migration against a scratch database and confirm the generated
+      `tsvector` column and `hydra_retrieve` compile
+- [ ] Replace the placeholder rates in `meter.js` with your actual contract rates
+- [ ] Move boosts in `hydra_retrieve` to a materialised lookup once rule volume
+      is real — the correlated subquery is correct but not fast
+- [ ] Connect as `hydra_app`, never as the table owner, or RLS is bypassed
+- [ ] Load-test with the HNSW index warm and cold; the difference is 40×

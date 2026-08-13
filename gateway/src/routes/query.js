@@ -17,6 +17,13 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const TOKEN_TTL_MIN = parseInt(process.env.TOKEN_TTL_MINUTES || '30', 10);
 const CACHE_TTL_S = parseInt(process.env.QUERY_CACHE_TTL_SECONDS || '3600', 10);
 
+async function loadPolicy(siteId) {
+  const { rows } = await pool.query(
+    `SELECT (cache_policy($1)).*, candidate_limit_for($1) AS candidate_limit`, [siteId]);
+  return rows[0] || { ttl_seconds: 3600, permanent: false, value_cap: null,
+                      candidate_limit: 200 };
+}
+
 async function loadTaxonomy(siteId, locale) {
   const { rows } = await pool.query(
     `SELECT * FROM taxonomy_profiles
@@ -42,6 +49,21 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
   const profile = await loadTaxonomy(siteId, locale);
   if (!profile) return res.json({ ok: false, error: 'not_synced' });
 
+  const policy = await loadPolicy(siteId);
+
+  // Non-production trims the taxonomy prompt to N values per attribute. Shape
+  // is unchanged so intent resolution still behaves the same; only the cached
+  // input volume shrinks.
+  if (policy.value_cap) {
+    profile.refinements = Object.fromEntries(
+      Object.entries(profile.refinements || {}).map(([k, d]) => [k,
+        { ...d, values: (d.values || []).slice(0, policy.value_cap) }]));
+  }
+
+  // Explicit bypass, for a developer iterating on prompts against a sandbox
+  // whose cache never expires.
+  const noCache = req.get('X-Hydra-No-Cache') === '1';
+
   const normalised = intentLib.normaliseQuery(q);
   const key = intentLib.cacheKey({
     normalised, promptHash: profile.prompt_hash, rulesVersion: '1'
@@ -55,11 +77,12 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
 
   // "office wear" resolves identically for every shopper on this site. At a
   // healthy hit rate you only pay a model provider on a minority of queries.
-  if (!priorIntent) {
+  if (!priorIntent && !noCache) {
     const hit = await withTenant(tenantId, (c) => c.query(
       `SELECT intent, candidate_ids FROM query_cache
         WHERE tenant_id=$1 AND site_id=$2 AND locale=$3 AND cache_key=$4
-          AND expires_at > now()`, [tenantId, siteId, locale, key]));
+          AND (expires_at IS NULL OR expires_at > now())`,
+      [tenantId, siteId, locale, key]));
     if (hit.rows[0]) {
       intent = hit.rows[0].intent;
       masterIds = hit.rows[0].candidate_ids;
@@ -87,19 +110,27 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
       return res.json({ ok: false, error: 'intent_failed' });
     }
 
-    const r = await retrieve({ tenantId, siteId, locale, intent, queryText: q });
+    const r = await retrieve({ tenantId, siteId, locale, intent, queryText: q,
+                               candidateLimit: policy.candidate_limit });
     masterIds = r.masterIds;
     relaxed = r.relaxed;
 
     if (!priorIntent) {
+      // NULL expires_at = permanent (sandbox). The purge job skips those.
       await withTenant(tenantId, (c) => c.query(
         `INSERT INTO query_cache (tenant_id, site_id, locale, cache_key,
                                   normalised_q, intent, candidate_ids, expires_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7, now() + ($8 || ' seconds')::interval)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,
+                 CASE WHEN $8::integer IS NULL THEN NULL
+                      ELSE now() + ($8 || ' seconds')::interval END)
          ON CONFLICT (tenant_id, site_id, locale, cache_key)
-         DO UPDATE SET hit_count = query_cache.hit_count + 1`,
+         DO UPDATE SET intent = EXCLUDED.intent,
+                       candidate_ids = EXCLUDED.candidate_ids,
+                       expires_at = EXCLUDED.expires_at,
+                       hit_count = query_cache.hit_count + 1`,
         [tenantId, siteId, locale, key, normalised,
-         JSON.stringify(intent), masterIds, String(CACHE_TTL_S)]));
+         JSON.stringify(intent), masterIds,
+         policy.permanent ? null : (policy.ttl_seconds || CACHE_TTL_S)]));
     }
   }
 
@@ -129,7 +160,11 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
     masterIds,
     intent,
     relaxed,
-    cached
+    cached,
+    // Surfaced so a merchant can confirm at a glance which key they pasted.
+    // Pasting the production key on a sandbox instance is a common mistake and
+    // an expensive one.
+    environment: req.hydra.environment
   });
 });
 

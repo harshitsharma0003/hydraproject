@@ -32,6 +32,8 @@ router.post('/health', requireKey('secret'), async (req, res) => {
     gatewayVersion: '1.0.0',
     api: 'v1',
     tier: req.hydra.tier,
+    environment: req.hydra.environment,
+    billable: req.hydra.billable,
     licenseStatus: req.hydra.status,
     narrationEnabled: req.hydra.narration_enabled,
     catalog: {

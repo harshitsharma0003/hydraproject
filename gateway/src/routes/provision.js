@@ -14,6 +14,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
  * Shared by the Stripe webhook (SFCC purchases) and Shopify OAuth install.
  */
 async function provision({ name, platform, externalSiteId, tier = 'starter',
+                           environment = 'production',
                            stripeCustomerId = null, stripeSubId = null,
                            allowedOrigins = [] }) {
   const client = await pool.connect();
@@ -31,9 +32,10 @@ async function provision({ name, platform, externalSiteId, tier = 'starter',
       [tenant.id, tier, quota, tier !== 'starter', stripeCustomerId, stripeSubId]);
 
     const { rows: [site] } = await client.query(
-      `INSERT INTO sites (tenant_id, external_site_id, platform, allowed_origins)
-       VALUES ($1,$2,$3,$4) RETURNING id`,
-      [tenant.id, externalSiteId, platform, allowedOrigins]);
+      `INSERT INTO sites (tenant_id, external_site_id, platform, allowed_origins,
+                          environment)
+       VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+      [tenant.id, externalSiteId, platform, allowedOrigins, environment]);
 
     const pk = issueKey('publishable');
     const sk = issueKey('secret');
@@ -62,7 +64,7 @@ router.post('/tenants/provision', async (req, res) => {
   if (!bootstrap || bootstrap !== process.env.BOOTSTRAP_SECRET) {
     return res.status(401).json({ ok: false, error: 'unauthorised' });
   }
-  const { name, platform, externalSiteId, tier, allowedOrigins } = req.body || {};
+  const { name, platform, externalSiteId, tier, allowedOrigins, environment } = req.body || {};
   if (!platform || !externalSiteId) {
     return res.status(400).json({ ok: false, error: 'missing_fields' });
   }
@@ -75,9 +77,10 @@ router.post('/tenants/provision', async (req, res) => {
   try {
     const result = await provision({
       name: name || externalSiteId, platform, externalSiteId,
-      tier: tier || 'starter', allowedOrigins: allowedOrigins || []
+      tier: tier || 'starter', environment: environment || 'production',
+      allowedOrigins: allowedOrigins || []
     });
-    res.json({ ok: true, ...result });
+    res.json({ ok: true, environment: environment || 'production', ...result });
   } catch (e) {
     res.status(500).json({ ok: false, error: 'provision_failed' });
   }

@@ -34,7 +34,7 @@ function pickGenderOnly(attrs) {
   return out;
 }
 
-async function runRetrieval(client, tenantId, siteId, locale, f) {
+async function runRetrieval(client, tenantId, siteId, locale, f, limit) {
   const { rows } = await client.query(
     `SELECT * FROM hydra_retrieve($1,$2,$3,$4::halfvec,$5,$6::jsonb,$7,$8,$9,$10)`,
     [tenantId, siteId, locale, f.vector, f.queryText,
@@ -50,7 +50,8 @@ async function runRetrieval(client, tenantId, siteId, locale, f) {
 /**
  * @returns {{ masterIds: string[], relaxed: object|null }}
  */
-async function retrieve({ tenantId, siteId, locale, intent, queryText }) {
+async function retrieve({ tenantId, siteId, locale, intent, queryText,
+                          candidateLimit }) {
   const [vector] = await embed([buildSemanticText(intent, queryText)], 'query');
 
   const base = {
@@ -66,7 +67,8 @@ async function retrieve({ tenantId, siteId, locale, intent, queryText }) {
   return withTenant(tenantId, async (client) => {
     for (const rung of LADDER) {
       const filters = rung.relax(base);
-      const rows = await runRetrieval(client, tenantId, siteId, locale, filters);
+      const rows = await runRetrieval(client, tenantId, siteId, locale, filters,
+                                      candidateLimit);
 
       if (rows.length >= RESULT_FLOOR || rung.id === 'bare') {
         return {
