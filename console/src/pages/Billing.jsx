@@ -6,30 +6,32 @@ const inr = (micros) => '₹' + Math.round(micros / 1000000).toLocaleString('en-
 export default function Billing() {
   const [data, setData] = useState(null);
   const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => { api.billing().then(setData); }, []);
   if (!data) return <section><h1>Billing</h1><p className="muted">Loading…</p></section>;
 
   const current = (data.summary || [])[0];
 
-  async function upgrade(tier) {
+  // Billing is sales-led — no self-serve card payment. Choosing a plan records
+  // an upgrade request; the team provisions it manually.
+  async function requestPlan(label) {
+    setBusy(true);
     setMsg('');
-    const r = await api.checkout(tier);
-    if (r?.url) window.location.assign(r.url);       // Stripe Checkout
-    else setMsg('Payments are not enabled on this instance yet. Once Stripe keys '
-      + 'are configured, this will open secure checkout.');
-  }
-
-  async function buyCredits() {
-    setMsg('');
-    const r = await api.buyCredits(1);
-    if (r?.url) window.location.assign(r.url);
-    else setMsg('Payments are not enabled on this instance yet.');
+    const r = await api.requestUpgrade(label);
+    setBusy(false);
+    setMsg(r?.ok
+      ? `Thanks — we’ve logged your interest in ${label}. Our team will be in touch to activate it.`
+      : 'Could not send the request. Please email sales@thinkvisor.io.');
   }
 
   return (
     <section>
       <h1>Billing</h1>
+      <p className="muted">
+        Plans are activated by our team — there is no card checkout here. Request
+        a plan below or email <a href="mailto:sales@thinkvisor.io">sales@thinkvisor.io</a>.
+      </p>
 
       {msg && <p className="warn">{msg}</p>}
 
@@ -62,13 +64,6 @@ export default function Billing() {
         </>
       )}
 
-      <h2 style={{ marginTop: 28 }}>Prepaid credits</h2>
-      <p className="muted">
-        Balance: {data.credits.toLocaleString()} queries. Blocks of 50,000 avoid
-        overage on the invoice.
-      </p>
-      <button onClick={buyCredits}>Buy a credit block</button>
-
       <h2 style={{ marginTop: 28 }}>Plan</h2>
       <div className="plans">
         {Object.entries(data.plans).filter(([k]) => k !== 'trial').map(([k, p]) => (
@@ -76,10 +71,15 @@ export default function Billing() {
             <h3>{p.label}</h3>
             <div className="price">{inr(p.fee)}<span>/month</span></div>
             <p className="muted">{p.included.toLocaleString()} queries included</p>
-            <button onClick={() => upgrade(k)}>Choose {p.label}</button>
+            <button disabled={busy} onClick={() => requestPlan(p.label)}>
+              Request {p.label}
+            </button>
           </div>
         ))}
       </div>
+      <p className="muted" style={{ marginTop: 12 }}>
+        Prepaid credit blocks and annual pricing are available on request.
+      </p>
 
       <h2 style={{ marginTop: 28 }}>Invoices</h2>
       <table>

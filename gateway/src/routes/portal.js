@@ -79,6 +79,23 @@ router.post('/signup', async (req, res) => {
 });
 
 /* ------------------------------------------------------------------ *
+ * Contact / plan enquiry (public). Billing is sales-led, not self-serve:
+ * the pricing page posts here instead of opening a checkout. Public because
+ * the homepage visitor has no account yet.
+ * ------------------------------------------------------------------ */
+router.post('/contact', async (req, res) => {
+  const { name, email, company, plan, message } = req.body || {};
+  if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return res.status(400).json({ ok: false, error: 'invalid_email' });
+  }
+  await pool.query(
+    `INSERT INTO plan_enquiries (name, email, company, plan, message, source)
+     VALUES ($1,$2,$3,$4,$5,'landing')`,
+    [name || null, email, company || null, plan || null, (message || '').slice(0, 2000)]);
+  res.json({ ok: true });
+});
+
+/* ------------------------------------------------------------------ *
  * Add an environment (UAT / an extra production storefront) to the
  * signed-in tenant. Non-production is unique per platform at the DB level
  * (sites_one_nonprod_per_platform), so a second UAT is refused cleanly.
@@ -224,7 +241,24 @@ router.get('/billing', requireConsole, rbac.require('billing:read'), async (req,
   });
 });
 
-/** Stripe Checkout for a plan upgrade. */
+/**
+ * Plan upgrade request from a signed-in customer. Sales-led: this records the
+ * interest and the team provisions the plan by hand. (The Stripe checkout below
+ * is left in place but unused — the console never calls it.)
+ */
+router.post('/billing/enquiry', requireConsole, async (req, res) => {
+  const { plan, message } = req.body || {};
+  const { rows: [t] } = await pool.query(
+    'SELECT contact_email, company FROM tenants WHERE id=$1', [req.user.tenant_id]);
+  await pool.query(
+    `INSERT INTO plan_enquiries (tenant_id, email, company, plan, message, source)
+     VALUES ($1,$2,$3,$4,$5,'billing')`,
+    [req.user.tenant_id, t?.contact_email || req.user.email, t?.company || null,
+     plan || null, (message || '').slice(0, 2000)]);
+  res.json({ ok: true });
+});
+
+/** Stripe Checkout for a plan upgrade. (Unused — billing is sales-led.) */
 router.post('/checkout', requireConsole, rbac.require('billing:write'), async (req, res) => {
   if (!stripe) return res.status(503).json({ ok: false, error: 'billing_unavailable' });
   const { tier } = req.body || {};

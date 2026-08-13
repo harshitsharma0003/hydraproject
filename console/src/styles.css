@@ -285,6 +285,23 @@ button.link { background:none; color:var(--accent); padding:0; text-align:left; 
       padding:26px 6vw; border-top:1px solid var(--edge); }
 .lp-foot-links { display:flex; gap:20px; font-size:14px; color:#57566a; }
 
+/* contact / sales form */
+.lp-contact { max-width:640px; margin:0 auto; }
+.lp-contact-form { display:flex; flex-direction:column; gap:14px; text-align:left;
+      background:#fff; border:1px solid var(--edge); border-radius:16px; padding:26px; }
+.lp-field-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.lp-contact-form label { display:flex; flex-direction:column; gap:5px; font-size:13.5px;
+      color:#57566a; font-weight:500; }
+.lp-contact-form input, .lp-contact-form select, .lp-contact-form textarea {
+      padding:10px 12px; border:1px solid var(--edge); border-radius:9px; font:inherit;
+      background:#fff; color:var(--ink); }
+.lp-contact-form textarea { resize:vertical; }
+.lp-contact-form .lp-btn { align-self:flex-start; border:0; cursor:pointer; }
+.lp-contact-done { text-align:center; background:#eef7f1; border:1px solid #bfe3cd;
+      border-radius:16px; padding:30px; }
+.lp-contact-done strong { font-size:17px; }
+@media (max-width:560px) { .lp-field-row { grid-template-columns:1fr; } }
+
 @keyframes lp-fade { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
 @keyframes lp-pop { from { opacity:0; transform:translateY(10px) scale(.97); } to { opacity:1; transform:none; } }
 @keyframes lp-blink { 0%,50% { opacity:1; } 51%,100% { opacity:0; } }

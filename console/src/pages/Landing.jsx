@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Logo from '../Logo';
+import { api } from '../api';
 
 /* ------------------------------------------------------------------ *
  * Interactive hero demo. These are illustrative — no backend call —
@@ -100,6 +101,27 @@ export default function Landing() {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const timer = useRef(null);
+
+  const [form, setForm] = useState({ name: '', email: '', company: '', plan: '', message: '' });
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [err, setErr] = useState('');
+  const setField = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const pickPlan = (planName) => {
+    setForm((f) => ({ ...f, plan: planName }));
+    document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+  };
+  const submitContact = async (e) => {
+    e.preventDefault();
+    setErr('');
+    if (!form.email) return setErr('Please enter a work email.');
+    setSending(true);
+    const r = await api.contact(form);
+    setSending(false);
+    if (r?.ok) setSent(true);
+    else setErr('Could not send — please email sales@thinkvisor.io directly.');
+  };
 
   useEffect(() => {
     if (paused) return undefined;
@@ -257,16 +279,55 @@ export default function Landing() {
               <div className="lp-price">{p.price}<span>/mo</span></div>
               <p className="lp-sub">{p.queries} production queries included</p>
               <ul>{p.features.map((f) => <li key={f}>{f}</li>)}</ul>
-              <Link to={`/signup?plan=${p.id}`} className={`lp-btn ${p.featured ? '' : 'ghost'} full`}>
-                Choose {p.name}
-              </Link>
+              <button type="button" onClick={() => pickPlan(p.name)}
+                      className={`lp-btn ${p.featured ? '' : 'ghost'} full`}>
+                Contact sales
+              </button>
             </div>
           ))}
         </div>
         <p className="lp-fine center">
-          Overage from ₹0.30 per query, or buy prepaid blocks. Queries that fall
-          back to native search are never charged.
+          Annual and volume pricing available. Queries that fall back to native
+          search are never charged.
         </p>
+      </section>
+
+      <section id="contact" className="lp-section lp-contact">
+        <h2 className="lp-h2">Talk to us</h2>
+        <p className="lp-sub">
+          Tell us about your store and we’ll set you up with the right plan.
+          Prefer email? <a href="mailto:sales@thinkvisor.io">sales@thinkvisor.io</a>.
+        </p>
+        {sent ? (
+          <div className="lp-contact-done">
+            <strong>Thanks — we’ve got your details.</strong>
+            <p className="lp-sub">Our team will be in touch shortly.</p>
+          </div>
+        ) : (
+          <form className="lp-contact-form" onSubmit={submitContact}>
+            <div className="lp-field-row">
+              <label>Name<input type="text" value={form.name} onChange={setField('name')} /></label>
+              <label>Work email<input type="email" required value={form.email} onChange={setField('email')} /></label>
+            </div>
+            <div className="lp-field-row">
+              <label>Company<input type="text" value={form.company} onChange={setField('company')} /></label>
+              <label>Plan
+                <select value={form.plan} onChange={setField('plan')}>
+                  <option value="">Not sure yet</option>
+                  {PLANS.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+                </select>
+              </label>
+            </div>
+            <label>Anything else?
+              <textarea rows="3" value={form.message} onChange={setField('message')}
+                        placeholder="Platform (SFCC / Shopify), catalog size, timeline…" />
+            </label>
+            {err && <p className="error">{err}</p>}
+            <button type="submit" className="lp-btn big" disabled={sending}>
+              {sending ? 'Sending…' : 'Request a call'}
+            </button>
+          </form>
+        )}
       </section>
 
       <section className="lp-final">

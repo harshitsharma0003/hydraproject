@@ -53,10 +53,9 @@ export const api = {
              { method: 'POST', body: JSON.stringify({ token, password }) }),
   changePassword: (current, password) => call('/api/auth/change-password',
              { method: 'POST', body: JSON.stringify({ current, password }) }),
-  checkout: (tier) =>
-    call('/api/checkout', { method: 'POST', body: JSON.stringify({ tier }) }),
-  buyCredits: (blocks) =>
-    call('/api/credits/purchase', { method: 'POST', body: JSON.stringify({ blocks }) }),
+  contact: (b) => call('/api/contact', { method: 'POST', body: JSON.stringify(b) }),
+  requestUpgrade: (plan, message) =>
+    call('/api/billing/enquiry', { method: 'POST', body: JSON.stringify({ plan, message }) }),
   sites:   () => call('/api/console/sites'),
   rules:   () => call('/api/console/rules'),
   addRule: (r) => call('/api/console/rules', { method: 'POST', body: JSON.stringify(r) }),
