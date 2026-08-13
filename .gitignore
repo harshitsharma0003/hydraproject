@@ -13,3 +13,9 @@ build/
 .idea/
 coverage/
 *.pid
+
+# Real credentials for a release zip. Must never reach the public repo —
+# GitHub secret scanning would flag the Postmark token and Postmark
+# auto-revokes tokens it is told about.
+setup/secrets.env
+/etc/hydra/

@@ -54,11 +54,24 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Load setup/secrets.env if it exists. Gitignored, so it can carry real values
+# in a release zip without ever reaching the public repo.
+SECRETS_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/secrets.env"
+if [[ -f "$SECRETS_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$SECRETS_FILE"
+  set +a
+  LOADED_SECRETS=1
+fi
+
 log()  { echo -e "\n\033[1;34m==>\033[0m $*"; }
 warn() { echo -e "\033[1;33m[warn]\033[0m $*"; }
 die()  { echo -e "\033[1;31m[fail]\033[0m $*"; exit 1; }
 
 [[ $EUID -eq 0 ]] || die "run as root (sudo bash install.sh)"
+
+[[ -n "${LOADED_SECRETS:-}" ]] && echo "loaded setup/secrets.env" 
 
 # Passing a secret as a command-line argument leaves it in shell history and in
 # /proc for the life of the process. Prefer the environment-variable form:
@@ -238,6 +251,13 @@ sudo -u hydra bash -c "cd $APP_ROOT/console && npm install --silent && npm run b
 # ---------------------------------------------------------------------------
 log "7/10  Environment and migrations"
 # ---------------------------------------------------------------------------
+# Preserved outside the git checkout so `hydra-update` (which hard-resets the
+# working tree) cannot wipe it.
+if [[ -f "$SECRETS_FILE" ]]; then
+  install -d -o hydra -g hydra -m 700 /etc/hydra
+  install -o hydra -g hydra -m 600 "$SECRETS_FILE" /etc/hydra/secrets.env
+fi
+
 ENV_FILE="$APP_ROOT/gateway/.env"
 if [[ ! -f "$ENV_FILE" ]]; then
   cat > "$ENV_FILE" <<EOF
@@ -263,7 +283,7 @@ CONSOLE_ORIGIN=https://${DOMAIN:-localhost}
 # password reset and invites do nothing on 'console'.
 EMAIL_PROVIDER=${EMAIL_PROVIDER}
 EMAIL_FROM=${EMAIL_FROM_ADDR:-Hydra <no-reply@mail.${DOMAIN:-localhost}>}
-EMAIL_REPLY_TO=
+EMAIL_REPLY_TO=${EMAIL_REPLY_TO:-}
 POSTMARK_TOKEN=${POSTMARK_TOKEN}
 POSTMARK_STREAM=outbound
 RESEND_API_KEY=${RESEND_API_KEY}
@@ -307,6 +327,18 @@ BEFORE=$(git -C "$APP_ROOT" rev-parse HEAD)
 sudo -u hydra git -C "$APP_ROOT" reset --hard "origin/$BRANCH"
 AFTER=$(git -C "$APP_ROOT" rev-parse HEAD)
 echo "    $BEFORE -> $AFTER"
+
+# A git hard-reset wipes anything untracked in the checkout, so secrets live in
+# /etc/hydra and are re-applied here rather than stored under /opt/hydra.
+if [[ -f /etc/hydra/secrets.env ]]; then
+  set -a; source /etc/hydra/secrets.env; set +a
+  for k in EMAIL_PROVIDER POSTMARK_TOKEN POSTMARK_STREAM EMAIL_FROM EMAIL_REPLY_TO \
+           ANTHROPIC_API_KEY VOYAGE_API_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET; do
+    v="${!k:-}"
+    [[ -n "$v" ]] && /usr/local/bin/hydra-set "$k" "$v" >/dev/null
+  done
+  echo "    re-applied /etc/hydra/secrets.env"
+fi
 
 echo "==> dependencies"
 sudo -u hydra bash -c "cd $APP_ROOT/gateway && npm install --omit=dev --silent"
@@ -501,9 +533,11 @@ cat <<EOF
  Installed. Services are enabled but NOT started.
 ═══════════════════════════════════════════════════════════════
 
- 1. Add your API keys:
-      sudo -u hydra nano ${APP_ROOT}/gateway/.env
-      (ANTHROPIC_API_KEY and VOYAGE_API_KEY are both required)
+ 1. $( [[ -n "${ANTHROPIC_API_KEY}" && -n "${VOYAGE_API_KEY}" ]] \
+       && echo "API keys are set." \
+       || echo "Add the missing API keys:
+      sudo hydra-set ANTHROPIC_API_KEY sk-ant-xxxx
+      sudo hydra-set VOYAGE_API_KEY pa-xxxx" )
 
  2. Email is set to '${EMAIL_PROVIDER}'.
     $( [[ "$EMAIL_PROVIDER" == "console" ]] \
