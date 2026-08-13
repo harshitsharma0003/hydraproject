@@ -8,6 +8,10 @@ import Rules from './pages/Rules';
 import Queries from './pages/Queries';
 import Usage from './pages/Usage';
 import Syncs from './pages/Syncs';
+import Environments from './pages/Environments';
+import Billing from './pages/Billing';
+import Landing from './pages/Landing';
+import Signup from './pages/Signup';
 import './styles.css';
 
 const Private = ({ children }) =>
@@ -16,9 +20,13 @@ const Private = ({ children }) =>
 createRoot(document.getElementById('root')).render(
   <BrowserRouter>
     <Routes>
+      <Route path="/welcome" element={<Landing />} />
+      <Route path="/signup" element={<Signup />} />
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Private><App /></Private>}>
-        <Route index element={<Sites />} />
+        <Route index element={<Environments />} />
+        <Route path="sites" element={<Sites />} />
+        <Route path="billing" element={<Billing />} />
         <Route path="rules" element={<Rules />} />
         <Route path="queries" element={<Queries />} />
         <Route path="syncs" element={<Syncs />} />

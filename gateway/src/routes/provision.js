@@ -104,6 +104,33 @@ router.post('/billing/webhook', express.raw({ type: 'application/json' }),
 
     if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
+
+      // Prepaid credit block: add to the ledger, no provisioning.
+      if (s.metadata?.kind === 'credits') {
+        const blocks = parseInt(s.metadata.blocks || '1', 10);
+        await pool.query(
+          `INSERT INTO credit_ledger (tenant_id, kind, queries, amount_micros,
+                                      stripe_ref, note, expires_at)
+           VALUES ($1,'purchase',$2,$3,$4,$5, now() + interval '12 months')`,
+          [s.metadata.tenantId, blocks * 50000, s.amount_total * 10000,
+           s.id, `${blocks} credit block(s)`]);
+        return res.json({ received: true });
+      }
+
+      // Plan upgrade on an existing tenant: raise the quota and issue the
+      // production keys that a trial deliberately does not get.
+      if (s.metadata?.tenantId) {
+        const tier = s.metadata.tier || 'starter';
+        const quota = { starter: 40000, growth: 250000, enterprise: 1000000 }[tier];
+        await pool.query(
+          `UPDATE licenses SET tier=$2::license_tier, monthly_query_quota=$3,
+                  included_queries=$3, narration_enabled=$4, status='active',
+                  stripe_customer_id=$5, stripe_sub_id=$6
+            WHERE tenant_id=$1`,
+          [s.metadata.tenantId, tier, quota, tier !== 'starter',
+           s.customer, s.subscription]);
+        return res.json({ received: true });
+      }
       const result = await provision({
         name: s.customer_details?.name || s.customer_email || 'New tenant',
         platform: s.metadata?.platform || 'sfcc_sfra',

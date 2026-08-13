@@ -9,11 +9,13 @@ export default function App() {
       <aside>
         <div className="brand">Hydra</div>
         <nav>
-          <NavLink to="/" end>Sites</NavLink>
+          <NavLink to="/" end>Environments</NavLink>
+          <NavLink to="/sites">Sites</NavLink>
           <NavLink to="/queries">Queries</NavLink>
           <NavLink to="/rules">Rules</NavLink>
           <NavLink to="/syncs">Syncs</NavLink>
           <NavLink to="/usage">Usage</NavLink>
+          <NavLink to="/billing">Billing</NavLink>
         </nav>
         <button className="link" onClick={logout}>Sign out</button>
       </aside>
