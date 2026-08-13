@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Syntax check all JavaScript
+        run: |
+          fail=0
+          for f in $(find gateway -name '*.js' -not -path '*/node_modules/*'); do
+            node --check "$f" || fail=1
+          done
+          exit $fail
+
+      - name: Validate JSON
+        run: |
+          for f in $(find . -name '*.json' -not -path '*/node_modules/*'); do
+            node -e "JSON.parse(require('fs').readFileSync('$f'))" || exit 1
+          done
+
+      - name: Shellcheck the installer
+        run: bash -n setup/install.sh
+
+      - name: Gateway installs
+        run: cd gateway && npm install --omit=dev
+
+      - name: Console builds
+        run: cd console && npm install && npm run build
+
+  migrate:
+    runs-on: ubuntu-latest
+    # The migration has never run against a live Postgres. This job is the
+    # first thing that will actually execute it - expect failures here before
+    # anything else in the project works.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: hydra
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+        ports: ['5432:5432']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - name: Enable extensions
+        env: { PGPASSWORD: postgres }
+        run: |
+          psql -h localhost -U postgres -d hydra -c "CREATE EXTENSION IF NOT EXISTS vector"
+          psql -h localhost -U postgres -d hydra -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+          psql -h localhost -U postgres -d hydra -c "CREATE EXTENSION IF NOT EXISTS pgcrypto"
+          psql -h localhost -U postgres -d hydra -tAc "SELECT extversion FROM pg_extension WHERE extname='vector'"
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hydra
+        run: cd gateway && npm install --omit=dev && node scripts/migrate.js
+
+      - name: Smoke-test the retrieval function compiles
+        env: { PGPASSWORD: postgres }
+        run: |
+          psql -h localhost -U postgres -d hydra -c "\df hydra.hydra_retrieve"
+          psql -h localhost -U postgres -d hydra -c "\d hydra.products"

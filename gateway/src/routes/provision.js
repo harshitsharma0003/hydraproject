@@ -1,0 +1,131 @@
+'use strict';
+
+const express = require('express');
+const Stripe = require('stripe');
+const { pool } = require('../db');
+const { issueKey } = require('../auth');
+
+const router = express.Router();
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
+
+/**
+ * Creates a tenant, license, site and both keys in one transaction.
+ * Shared by the Stripe webhook (SFCC purchases) and Shopify OAuth install.
+ */
+async function provision({ name, platform, externalSiteId, tier = 'starter',
+                           stripeCustomerId = null, stripeSubId = null,
+                           allowedOrigins = [] }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: [tenant] } = await client.query(
+      'INSERT INTO tenants (name) VALUES ($1) RETURNING id', [name]);
+
+    const quota = { starter: 100000, growth: 500000, enterprise: 5000000 }[tier];
+    await client.query(
+      `INSERT INTO licenses (tenant_id, tier, monthly_query_quota,
+                             narration_enabled, stripe_customer_id, stripe_sub_id)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [tenant.id, tier, quota, tier !== 'starter', stripeCustomerId, stripeSubId]);
+
+    const { rows: [site] } = await client.query(
+      `INSERT INTO sites (tenant_id, external_site_id, platform, allowed_origins)
+       VALUES ($1,$2,$3,$4) RETURNING id`,
+      [tenant.id, externalSiteId, platform, allowedOrigins]);
+
+    const pk = issueKey('publishable');
+    const sk = issueKey('secret');
+    for (const [k, kind] of [[pk, 'publishable'], [sk, 'secret']]) {
+      await client.query(
+        `INSERT INTO api_keys (tenant_id, site_id, kind, prefix, key_hash)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [tenant.id, site.id, kind, k.prefix, k.hash]);
+    }
+
+    await client.query('COMMIT');
+    // Full key values are returned exactly once and never stored in plaintext.
+    return { tenantId: tenant.id, siteId: site.id,
+             publishableKey: pk.full, secretKey: sk.full };
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+/** Shopify OAuth install. Keys are provisioned automatically - nothing to paste. */
+router.post('/tenants/provision', async (req, res) => {
+  const bootstrap = req.get('X-Hydra-Bootstrap');
+  if (!bootstrap || bootstrap !== process.env.BOOTSTRAP_SECRET) {
+    return res.status(401).json({ ok: false, error: 'unauthorised' });
+  }
+  const { name, platform, externalSiteId, tier, allowedOrigins } = req.body || {};
+  if (!platform || !externalSiteId) {
+    return res.status(400).json({ ok: false, error: 'missing_fields' });
+  }
+
+  const { rows: existing } = await pool.query(
+    'SELECT id FROM sites WHERE external_site_id = $1 AND platform = $2',
+    [externalSiteId, platform]);
+  if (existing[0]) return res.json({ ok: false, error: 'already_provisioned' });
+
+  try {
+    const result = await provision({
+      name: name || externalSiteId, platform, externalSiteId,
+      tier: tier || 'starter', allowedOrigins: allowedOrigins || []
+    });
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: 'provision_failed' });
+  }
+});
+
+/**
+ * Stripe webhook. SFCC customers buy online, then download the cartridge and
+ * paste the keys returned here.
+ */
+router.post('/billing/webhook', express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    if (!stripe) return res.status(503).json({ ok: false });
+
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body, req.get('stripe-signature'), process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: 'bad_signature' });
+    }
+
+    if (event.type === 'checkout.session.completed') {
+      const s = event.data.object;
+      const result = await provision({
+        name: s.customer_details?.name || s.customer_email || 'New tenant',
+        platform: s.metadata?.platform || 'sfcc_sfra',
+        externalSiteId: s.metadata?.siteId || `pending-${s.id}`,
+        tier: s.metadata?.tier || 'starter',
+        stripeCustomerId: s.customer,
+        stripeSubId: s.subscription
+      });
+      // Delivery of keys and the signed download link happens out of band.
+      console.log('[hydra] provisioned tenant', result.tenantId);
+    }
+
+    if (event.type === 'customer.subscription.deleted') {
+      await pool.query(
+        `UPDATE licenses SET status='cancelled' WHERE stripe_sub_id=$1`,
+        [event.data.object.id]);
+    }
+
+    if (event.type === 'invoice.payment_failed') {
+      await pool.query(
+        `UPDATE licenses SET status='past_due' WHERE stripe_customer_id=$1`,
+        [event.data.object.customer]);
+    }
+
+    res.json({ received: true });
+  });
+
+module.exports = { router, provision };

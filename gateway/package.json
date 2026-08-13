@@ -1,0 +1,24 @@
+{
+  "name": "hydra-gateway",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "migrate": "node scripts/migrate.js",
+    "worker:ingest": "node src/worker/ingest.js",
+    "worker:embed": "node src/worker/embed.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.65.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1",
+    "pg-copy-streams": "^6.0.6",
+    "stripe": "^17.5.0"
+  }
+}
