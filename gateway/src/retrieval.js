@@ -35,9 +35,16 @@ function pickGenderOnly(attrs) {
 }
 
 async function runRetrieval(client, tenantId, siteId, locale, f, limit) {
+  // Personalisation is applied to the query vector before retrieval, so it
+  // nudges ordering within the result set rather than changing what is in it.
+  const vec = f.styleVector
+    ? (await client.query('SELECT blend_style($1::halfvec,$2::halfvec,$3) AS v',
+        [f.vector, f.styleVector, f.styleWeight || 0.15])).rows[0].v
+    : f.vector;
+
   const { rows } = await client.query(
     `SELECT * FROM algivo_retrieve($1,$2,$3,$4::halfvec,$5,$6::jsonb,$7,$8,$9,$10)`,
-    [tenantId, siteId, locale, f.vector, f.queryText,
+    [tenantId, siteId, locale, vec, f.queryText,
      JSON.stringify(f.attrs || {}),
      f.categories && f.categories.length ? f.categories : null,
      // Band is widened here, not in SQL, so the caller controls the policy.
@@ -51,11 +58,13 @@ async function runRetrieval(client, tenantId, siteId, locale, f, limit) {
  * @returns {{ masterIds: string[], relaxed: object|null }}
  */
 async function retrieve({ tenantId, siteId, locale, intent, queryText,
-                          candidateLimit }) {
+                          candidateLimit, styleVector, styleWeight }) {
   const [vector] = await embed([buildSemanticText(intent, queryText)], 'query');
 
   const base = {
     vector: toPgVector(vector),
+    styleVector,
+    styleWeight,
     queryText: queryText || '',
     attrs: intent.hardFilters || {},
     categories: intent.categories || [],

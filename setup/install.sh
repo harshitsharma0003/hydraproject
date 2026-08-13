@@ -351,9 +351,9 @@ echo "==> migrations"
 sudo -u postgres bash -c "cd $APP_ROOT && DATABASE_URL='postgresql://postgres@/algivo?host=/var/run/postgresql' node gateway/scripts/migrate.js"
 
 echo "==> restart"
-systemctl restart algivo-gateway algivo-ingest algivo-embed
+systemctl restart algivo-gateway algivo-ingest algivo-embed algivo-profiles
 sleep 2
-systemctl is-active algivo-gateway algivo-ingest algivo-embed
+systemctl is-active algivo-gateway algivo-ingest algivo-embed algivo-profiles
 curl -sf localhost:8080/health && echo && echo "==> ok"
 UPD
 chmod +x /usr/local/bin/algivo-update
@@ -408,9 +408,10 @@ EOF
 write_unit algivo-gateway.service "Algivo gateway API"      "src/server.js"        gateway
 write_unit algivo-ingest.service  "Algivo SFTP ingest worker" "src/worker/ingest.js" ingest
 write_unit algivo-embed.service   "Algivo embedding worker"   "src/worker/embed.js"  embed
+write_unit algivo-profiles.service "Algivo profile worker"    "src/worker/profiles.js" profiles
 
 systemctl daemon-reload
-systemctl enable algivo-gateway algivo-ingest algivo-embed
+systemctl enable algivo-gateway algivo-ingest algivo-embed algivo-profiles
 
 # Set or change one secret without opening an editor. Values never touch the
 # repo, only /opt/algivo/gateway/.env.
@@ -573,7 +574,7 @@ cat <<EOF
        || echo "Verify delivery:  sudo algivo-test-email you@example.com" )
 
  3. Start:
-      sudo systemctl start algivo-gateway algivo-ingest algivo-embed
+      sudo systemctl start algivo-gateway algivo-ingest algivo-embed algivo-profiles
 
  4. Check:
       curl localhost:8080/health

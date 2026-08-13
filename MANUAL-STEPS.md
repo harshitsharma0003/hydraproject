@@ -392,3 +392,68 @@ Ask customers for the reference shown in the UI. It maps to exactly one request.
   reset link
 - A "your password was changed" notice is always sent — that is how a user finds
   out if the reset was not them
+
+
+---
+
+# PART E — Personalisation
+
+## No third-party data is used, or available
+
+Instagram's Basic Display API was shut down in December 2024 and there is no
+successor for personal accounts. Google and Facebook sign-in return an email
+address, not interests. So social connect would deliver almost nothing even if
+it were built.
+
+What is predictive is already collected on-site: which products a shopper opens,
+which chips they click, what they add to cart.
+
+## How a profile is built
+
+`algivo-profiles` runs every five minutes over visitors with at least three
+engagement events and computes:
+
+- **style_vector** — recency-weighted mean of the embeddings of products they
+  engaged with. `add_to_cart` counts triple a click, `order` counts five times,
+  and weight halves every 30 days so a winter click does not still steer results
+  in June.
+- **price_affinity** — the p25/p50/p75 of prices they actually clicked, which is
+  a better budget signal than anything they typed.
+- **attr_affinity** — attribute values they engage with repeatedly.
+- **size_hints** — sizes from cart adds and orders only.
+
+## How it is applied
+
+The style vector is blended into the query vector at **15% weight** before
+retrieval. That is deliberately low: personalisation that overrides what someone
+just typed is worse than none. Searching "linen shirts" must return linen
+shirts, not last week's browsing. This nudges ordering within the result set
+rather than changing what is in it.
+
+Two hard rules:
+
+1. **Never on gift queries.** The intent parser already identifies them.
+   Someone shopping for their nephew does not want their own history steering
+   the results.
+2. **Personalised results are never written to the shared query cache.** One
+   shopper's ranking leaking to every other visitor would be a serious bug. A
+   personalised request reuses the cached *intent* but re-runs retrieval.
+
+Below three clicks nothing is applied — there is nothing reliable to learn.
+
+## Consent
+
+The `algivo_vid` cookie is only issued once the merchant's own consent manager
+has granted analytics consent. Without consent Algivo works fully but
+statelessly: no cookie, no events, no profile.
+
+`algivo_forget(tenant, visitor)` clears events, the visitor record **and** the
+derived profile. Wired to Shopify's `customers/redact` webhook.
+
+## Demoing it
+
+A profile needs history, so a fresh browser shows no personalisation. To show it
+working, click through several products of one style, wait for the worker
+(or run `SELECT compute_visitor_profile(tenant, visitor)` directly), then repeat
+a broad query and compare the ordering. The response includes
+`"personalised": true` when a profile was applied.

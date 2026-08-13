@@ -35,7 +35,7 @@ async function loadTaxonomy(siteId, locale) {
 
 router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (req, res) => {
   const { tenant_id: tenantId, site_id: siteId } = req.algivo;
-  const { q, locale, currency, priorIntent } = req.body || {};
+  const { q, locale, currency, priorIntent, visitorId } = req.body || {};
 
   if (!q || typeof q !== 'string') {
     return res.json({ ok: false, error: 'empty_query' });
@@ -51,6 +51,27 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
   if (!profile) return res.json({ ok: false, error: 'not_synced' });
 
   const policy = await loadPolicy(siteId);
+
+  /**
+   * Personalisation.
+   *
+   * Deliberately NOT applied to gift queries. Someone shopping for their nephew
+   * does not want their own browsing history steering the results, and the
+   * intent parser already tells us which case this is.
+   *
+   * A personalised result set must also never enter the shared query cache -
+   * one shopper's ranking would leak to everyone on the site. So a request that
+   * uses a profile skips the cache in both directions.
+   */
+  let styleVector = null;
+  if (visitorId) {
+    const { rows: prof } = await withTenant(tenantId, (c) => c.query(
+      `SELECT style_vector, click_count FROM visitor_profiles
+        WHERE tenant_id=$1 AND visitor_id=$2 AND style_vector IS NOT NULL`,
+      [tenantId, visitorId]));
+    // Below a handful of clicks there is nothing reliable to learn.
+    if (prof[0] && prof[0].click_count >= 3) styleVector = prof[0].style_vector;
+  }
 
   // Non-production trims the taxonomy prompt to N values per attribute. Shape
   // is unchanged so intent resolution still behaves the same; only the cached
@@ -78,6 +99,11 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
 
   // "office wear" resolves identically for every shopper on this site. At a
   // healthy hit rate you only pay a model provider on a minority of queries.
+  // Intent resolution is still cacheable when personalised - only the retrieval
+  // is shopper-specific - but the candidate list is not, so a personalised hit
+  // reuses the parsed intent and re-runs retrieval.
+  const personalised = !!styleVector;
+
   if (!priorIntent && !noCache) {
     const hit = await withTenant(tenantId, (c) => c.query(
       `SELECT intent, candidate_ids FROM query_cache
@@ -86,8 +112,16 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
       [tenantId, siteId, locale, key]));
     if (hit.rows[0]) {
       intent = hit.rows[0].intent;
-      masterIds = hit.rows[0].candidate_ids;
       cached = true;
+      if (personalised && intent.queryType !== 'gift') {
+        // Reuse the parsed intent, redo retrieval with their style vector.
+        const r = await retrieve({ tenantId, siteId, locale, intent, queryText: q,
+          candidateLimit: policy.candidate_limit, styleVector });
+        masterIds = r.masterIds;
+        relaxed = r.relaxed;
+      } else {
+        masterIds = hit.rows[0].candidate_ids;
+      }
     }
   }
 
@@ -112,11 +146,15 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
     }
 
     const r = await retrieve({ tenantId, siteId, locale, intent, queryText: q,
-                               candidateLimit: policy.candidate_limit });
+      candidateLimit: policy.candidate_limit,
+      // Never personalise a gift query - they are not shopping for themselves.
+      styleVector: intent.queryType === 'gift' ? null : styleVector });
     masterIds = r.masterIds;
     relaxed = r.relaxed;
 
-    if (!priorIntent) {
+    // Only cache the unpersonalised candidate list. A personalised one would
+    // leak one shopper's ranking to every other visitor on the site.
+    if (!priorIntent && !personalised) {
       // NULL expires_at = permanent (sandbox). The purge job skips those.
       await withTenant(tenantId, (c) => c.query(
         `INSERT INTO query_cache (tenant_id, site_id, locale, cache_key,
@@ -168,6 +206,7 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
     intent,
     relaxed,
     cached,
+    personalised,
     // Surfaced so a merchant can confirm at a glance which key they pasted.
     // Pasting the production key on a sandbox instance is a common mistake and
     // an expensive one.
