@@ -23,6 +23,13 @@ import './styles.css';
 const Private = ({ children }) =>
   localStorage.getItem('algivo_token') ? children : <Navigate to="/login" replace />;
 
+// The root path is the public marketing homepage for logged-out visitors and
+// the console for signed-in users. Reading the token inside a component (not
+// once at module load) means it re-evaluates on every navigation, so logging in
+// swaps the landing for the dashboard without a full reload.
+const Root = () =>
+  localStorage.getItem('algivo_token') ? <App /> : <Landing />;
+
 createRoot(document.getElementById('root')).render(
   <BrowserRouter>
     <ToastProvider>
@@ -33,7 +40,7 @@ createRoot(document.getElementById('root')).render(
       <Route path="/forgot" element={<Forgot />} />
       <Route path="/reset" element={<Reset />} />
       <Route path="/login" element={<Login />} />
-      <Route path="/" element={<Private><App /></Private>}>
+      <Route path="/" element={<Root />}>
         <Route index element={<Environments />} />
         <Route path="sites" element={<Sites />} />
         <Route path="billing" element={<Billing />} />
