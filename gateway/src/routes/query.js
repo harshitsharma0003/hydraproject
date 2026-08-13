@@ -115,7 +115,9 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
     [token, tenantId, siteId, locale, masterIds,
      JSON.stringify(intent), String(TOKEN_TTL_MIN)]));
 
-  meter.record(tenantId, siteId, { cached, usage }).catch(() => {});
+  meter.record(tenantId, siteId, { cached, usage,
+    environment: req.hydra.environment,
+    billable: req.hydra.billable }).catch(() => {});
 
   // Narration is tier-gated: it roughly doubles per-query model cost and is
   // the cleanest lever available.

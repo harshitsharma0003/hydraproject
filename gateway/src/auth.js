@@ -19,9 +19,17 @@ function requireKey(kind) {
 
     const { rows } = await pool.query(
       `SELECT k.id, k.tenant_id, k.site_id, k.kind, l.status, l.tier,
-              l.monthly_query_quota, l.narration_enabled, l.overage_allowed
+              l.narration_enabled, l.overage_allowed,
+              s.environment,
+              -- Non-production runs against its own cap, so a merchant's QA
+              -- suite can never eat production allowance or reach the invoice.
+              CASE WHEN s.environment = 'production'
+                   THEN l.monthly_query_quota
+                   ELSE l.nonprod_monthly_query_cap END AS monthly_query_quota,
+              (s.environment = 'production') AS billable
          FROM api_keys k
          JOIN licenses l ON l.tenant_id = k.tenant_id
+         JOIN sites s    ON s.id = k.site_id
         WHERE k.key_hash = $1 AND k.revoked_at IS NULL
         LIMIT 1`, [sha256(raw)]);
 

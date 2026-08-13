@@ -86,7 +86,9 @@ router.post('/refine', versionGate, requireKey('publishable'), rateLimit, async 
     [newToken, tenantId, siteId, activeLocale, masterIds,
      JSON.stringify(intent), String(TOKEN_TTL_MIN)]));
 
-  meter.record(tenantId, siteId, { cached: false, usage }).catch(() => {});
+  meter.record(tenantId, siteId, { cached: false, usage,
+    environment: req.hydra.environment,
+    billable: req.hydra.billable }).catch(() => {});
 
   if (!req.hydra.narration_enabled) delete intent.narration;
 
