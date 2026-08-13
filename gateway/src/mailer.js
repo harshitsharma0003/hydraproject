@@ -22,9 +22,9 @@ const rid = require('./requestid');
  */
 
 const PROVIDER = process.env.EMAIL_PROVIDER || 'console';
-const FROM = process.env.EMAIL_FROM || 'Hydra <no-reply@hydra.example.com>';
+const FROM = process.env.EMAIL_FROM || 'Hydra <no-reply@mail.thinkvisor.io>';
 const REPLY_TO = process.env.EMAIL_REPLY_TO || null;
-const ORIGIN = process.env.CONSOLE_ORIGIN || 'https://console.hydra.example.com';
+const ORIGIN = process.env.CONSOLE_ORIGIN || 'https://app.thinkvisor.io';
 
 let smtp = null;
 function smtpTransport() {

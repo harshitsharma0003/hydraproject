@@ -61,7 +61,7 @@ export default function Landing() {
 
       <footer>
         <span>© 2026 Hydra</span>
-        <a href="mailto:sales@hydra.example.com">sales@hydra.example.com</a>
+        <a href="mailto:sales@thinkvisor.io">sales@thinkvisor.io</a>
       </footer>
     </div>
   );

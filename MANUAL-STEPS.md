@@ -9,7 +9,7 @@ Internal. Not shipped to customers.
 ## A0. Install the VM
 
 ```bash
-sudo bash setup/install.sh --domain hydra.example.com --email ops@example.com
+sudo bash setup/install.sh --domain thinkvisor.io --email ops@example.com
 ```
 
 See `setup/README.md`. Sections A1–A3 below are performed by that script; they

@@ -12,11 +12,12 @@
 #          disk, lookups go from ~5 ms to 200 ms+.
 #
 # Usage:   sudo bash install.sh
-#          sudo bash install.sh --domain hydra.example.com --email ops@example.com
+#          sudo bash install.sh --domain thinkvisor.io --email ops@example.com
 #
 set -euo pipefail
 
 DOMAIN=""
+API_DOMAIN=""
 EMAIL=""
 REPO="${HYDRA_REPO:-https://github.com/harshitsharma0003/hydraproject.git}"
 BRANCH="${HYDRA_BRANCH:-main}"
@@ -39,7 +40,8 @@ PG_MAJOR=16
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --domain) DOMAIN="$2"; shift 2 ;;
+    --domain)     DOMAIN="$2"; shift 2 ;;
+    --api-domain) API_DOMAIN="$2"; shift 2 ;;
     --email)  EMAIL="$2";  shift 2 ;;
     --repo)   REPO="$2";   shift 2 ;;
     --branch) BRANCH="$2"; shift 2 ;;
@@ -278,6 +280,7 @@ EMBEDDING_DIM=1024
 JWT_SECRET=$(pwgen -s 48 1)
 BOOTSTRAP_SECRET=$(pwgen -s 48 1)
 CONSOLE_ORIGIN=https://${DOMAIN:-localhost}
+GATEWAY_ORIGIN=https://${API_DOMAIN:-${DOMAIN:-localhost}}
 
 # Email. Set EMAIL_PROVIDER to smtp/resend/postmark/sendgrid before going live -
 # password reset and invites do nothing on 'console'.
@@ -463,31 +466,53 @@ EOF
 log "9/10  nginx"
 # ---------------------------------------------------------------------------
 SERVER_NAME="${DOMAIN:-_}"
+API_SERVER_NAME="${API_DOMAIN:-$SERVER_NAME}"
+
 cat > /etc/nginx/sites-available/hydra <<EOF
+# Console and public site. Humans.
 server {
     listen 80;
     server_name ${SERVER_NAME};
 
-    client_max_body_size 64m;   # bulk chunk HTTP fallback
+    client_max_body_size 64m;
 
-    # Console SPA
     root ${APP_ROOT}/console/dist;
     index index.html;
     location / { try_files \$uri \$uri/ /index.html; }
 
-    # Storefront + admin API
-    location /v1/  { proxy_pass http://127.0.0.1:8080; include /etc/nginx/proxy_params; }
-    location /api/ { proxy_pass http://127.0.0.1:8080; include /etc/nginx/proxy_params; }
+    location /api/   { proxy_pass http://127.0.0.1:8080; include /etc/nginx/proxy_params; }
+    location /v1/    { proxy_pass http://127.0.0.1:8080; include /etc/nginx/proxy_params; }
     location /health { proxy_pass http://127.0.0.1:8080; }
 }
 EOF
+
+# Storefronts only. Separate hostname so a console outage or a bad SPA deploy
+# cannot touch the endpoint merchants' storefronts depend on, and so the two
+# can be rate-limited and monitored independently.
+if [[ -n "$API_DOMAIN" && "$API_DOMAIN" != "$SERVER_NAME" ]]; then
+cat >> /etc/nginx/sites-available/hydra <<EOF
+
+server {
+    listen 80;
+    server_name ${API_SERVER_NAME};
+
+    client_max_body_size 64m;   # bulk chunk HTTP fallback
+
+    location /v1/    { proxy_pass http://127.0.0.1:8080; include /etc/nginx/proxy_params; }
+    location /health { proxy_pass http://127.0.0.1:8080; }
+    location / { return 404; }
+}
+EOF
+fi
 ln -sf /etc/nginx/sites-available/hydra /etc/nginx/sites-enabled/hydra
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
 if [[ -n "$DOMAIN" && -n "$EMAIL" ]]; then
   apt-get install -y -qq certbot python3-certbot-nginx
-  certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect \
+  CERT_ARGS=(-d "$DOMAIN")
+  [[ -n "$API_DOMAIN" && "$API_DOMAIN" != "$DOMAIN" ]] && CERT_ARGS+=(-d "$API_DOMAIN")
+  certbot --nginx "${CERT_ARGS[@]}" --non-interactive --agree-tos -m "$EMAIL" --redirect \
     || warn "certbot failed — TLS not configured, run it manually"
 fi
 
@@ -566,6 +591,11 @@ cat <<EOF
 
  Redeploy after pushing to git:
       sudo hydra-update
+
+ Endpoints:
+      console   https://${DOMAIN:-localhost}
+      api       https://${API_DOMAIN:-${DOMAIN:-localhost}}
+      sftp      ${DOMAIN:+sftp.thinkvisor.io} (port 22)
 
  Credentials: ${CREDS}
 
