@@ -18,6 +18,7 @@ const PLANS = {
 };
 
 const rbac = require('../rbac');
+const mailer = require('../mailer');
 const requireConsole = rbac.authenticate;
 
 /* ------------------------------------------------------------------ *
@@ -57,6 +58,10 @@ router.post('/signup', async (req, res) => {
     'SELECT id FROM console_users WHERE tenant_id=$1 AND email=$2',
     [result.tenantId, email]);
   const token = rbac.issueToken(u.id);
+
+  await mailer.send('welcome', email, {
+    name: company, publishableKey: result.publishableKey
+  }, { tenantId: result.tenantId });
 
   // Keys are returned exactly once. They are stored hashed and cannot be
   // recovered afterwards - only rotated.

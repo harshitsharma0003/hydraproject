@@ -11,12 +11,16 @@ async function call(path, options = {}) {
       ...(options.headers || {})
     }
   });
+  const requestId = res.headers.get('X-Request-Id');
   if (res.status === 401) {
     localStorage.removeItem('hydra_token');
     window.location.href = '/login';
     return null;
   }
-  return res.json();
+  const body = await res.json().catch(() => ({ ok: false, error: 'bad_response' }));
+  // Every response carries the trace id, so an error message can quote
+  // something support can actually search for.
+  return requestId ? { ...body, requestId } : body;
 }
 
 export const api = {
@@ -40,6 +44,13 @@ export const api = {
   reactivateUser: (id) => call(`/api/users/${id}/reactivate`, { method: 'POST' }),
   revokeInvite: (id) => call(`/api/users/invites/${id}/revoke`, { method: 'POST' }),
   audit:   () => call('/api/audit'),
+  forgot:  (email) => call('/api/auth/forgot',
+             { method: 'POST', body: JSON.stringify({ email }) }),
+  checkReset: (token) => call(`/api/auth/reset/check?token=${encodeURIComponent(token)}`),
+  resetPassword: (token, password) => call('/api/auth/reset',
+             { method: 'POST', body: JSON.stringify({ token, password }) }),
+  changePassword: (current, password) => call('/api/auth/change-password',
+             { method: 'POST', body: JSON.stringify({ current, password }) }),
   checkout: (tier) =>
     call('/api/checkout', { method: 'POST', body: JSON.stringify({ tier }) }),
   buyCredits: (blocks) =>

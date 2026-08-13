@@ -6,6 +6,7 @@ export default function Users() {
   const [invite, setInvite] = useState({ email: '', role: 'viewer', siteIds: [] });
   const [link, setLink] = useState(null);
   const [error, setError] = useState('');
+  const [errorId, setErrorId] = useState(null);
 
   const load = () => api.users().then(setData);
   useEffect(() => { load(); }, []);
@@ -31,8 +32,8 @@ export default function Users() {
 
   async function act(fn, ...args) {
     const r = await fn(...args);
-    if (!r?.ok) setError(r?.error || 'That did not work.');
-    else setError('');
+    if (!r?.ok) { setError(r?.error || 'That did not work.'); setErrorId(r?.requestId); }
+    else { setError(''); setErrorId(null); }
     load();
   }
 
@@ -44,7 +45,12 @@ export default function Users() {
         admins always have access to everything.
       </p>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error">
+          {error}
+          {errorId && <span className="muted"> · Reference {errorId}</span>}
+        </p>
+      )}
 
       {canWrite && (
         <>

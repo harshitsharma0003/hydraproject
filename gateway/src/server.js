@@ -6,16 +6,21 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 
+const rid = require('./requestid');
+
 const app = express();
 
 app.use(helmet());
+// First, so every log line and every response downstream carries the id.
+app.use(rid.middleware);
 app.use(express.json({ limit: '8mb' }));   // sync batches
 app.use(cors({
   origin: (origin, cb) => cb(null, true),  // per-key origin lock happens in auth
   credentials: false
 }));
 
-app.get('/health', (req, res) => res.json({ ok: true, version: '1.0.0' }));
+app.get('/health', (req, res) =>
+  res.json({ ok: true, version: '1.0.0', requestId: req.requestId }));
 
 // Contract is versioned so a gateway deploy cannot break a cartridge in the field.
 app.use('/v1', require('./routes/query'));
@@ -26,16 +31,25 @@ app.use('/v1', require('./routes/event'));
 app.use('/v1', require('./routes/health'));
 app.use('/v1', require('./routes/bulk'));
 app.use('/v1', require('./routes/provision').router);
+app.use('/api', require('./routes/reset'));
 app.use('/api', require('./routes/users'));
 app.use('/api', require('./routes/portal').router);
 app.use('/api', require('./routes/admin').router);
 
 app.use((err, req, res, next) => {
-  console.error('[hydra]', err);
-  // Storefront callers treat any non-ok as "fall back to native search",
-  // so a 500 here degrades gracefully rather than breaking a page.
-  res.status(500).json({ ok: false, error: 'internal' });
+  rid.error('unhandled', { err: err.message, stack: err.stack, path: req.path });
+  // The request id is the whole point: a customer reporting a failure can quote
+  // it, and it maps to exactly one log line.
+  res.status(500).json({
+    ok: false,
+    error: 'internal',
+    requestId: req.requestId,
+    message: 'Something went wrong. Quote this request id to support.'
+  });
 });
 
+app.use((req, res) =>
+  res.status(404).json({ ok: false, error: 'not_found', requestId: req.requestId }));
+
 const port = process.env.PORT || 8080;
-app.listen(port, () => console.log(`Hydra gateway on :${port}`));
+app.listen(port, () => rid.info('gateway.started', { port, email: require('./mailer').PROVIDER }));

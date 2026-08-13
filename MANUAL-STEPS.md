@@ -304,3 +304,72 @@ when the mailer exists.
 cross-tenant, read-only by default, with time-boxed and audited impersonation.
 **The routes for these are not built.** The tables are there so support access
 is designed in rather than retrofitted, but for now your team uses psql.
+
+---
+
+# PART D — Email and request tracing
+
+## D1. Choose a mail provider
+
+Set `EMAIL_PROVIDER` in `.env` to one of `smtp`, `resend`, `postmark`,
+`sendgrid` or `console`.
+
+`smtp` works with any host — Zoho, Google Workspace, Amazon SES SMTP, Mailgun.
+The HTTP providers need only an API key.
+
+**`console` is the default after install and never delivers anything.** It
+prints to the log so you can develop without a provider. Password reset and
+invites will silently do nothing until you change it, which is the first thing
+to check if a customer says they never got their invite.
+
+## D2. Sending domain
+
+Whichever provider you pick, add SPF, DKIM and DMARC records for your sending
+domain before the first real send. Without them, password-reset emails land in
+spam and your customers conclude the product is broken.
+
+## D3. Bounce webhook
+
+Point your provider's bounce and complaint webhook at
+`POST /api/email/webhook`. Bounced and complained addresses go into
+`email_suppressions` and are never sent to again — repeat sends to dead
+addresses are how a sending domain's reputation dies.
+
+## D4. What gets sent
+
+| Template | Trigger |
+|---|---|
+| `welcome` | Signup — includes the publishable key only |
+| `password_reset` | Reset requested; 30-minute single-use link |
+| `password_changed` | Password changed — security notice, always sent |
+| `user_invited` | Someone is invited to the account |
+| `quota_warning` | 80% and 100% of monthly quota, once each per period |
+| `sync_failed` | Catalog ingest fails |
+
+Every send is recorded in `email_log` with its request id, so "did they get the
+invite?" is a query rather than a trip into the provider dashboard.
+
+## D5. Request ids
+
+Every response carries `X-Request-Id`. Errors include it in the body, and the
+console shows it beneath failure messages.
+
+Inbound ids are honoured, so a cartridge call and the gateway work it triggers
+share one trace. Logs are JSON lines including `requestId`, so:
+
+```bash
+grep '"requestId":"<id>"' /var/log/hydra/gateway.log | jq
+```
+
+Ask customers for the reference shown in the UI. It maps to exactly one request.
+
+## D6. Password reset behaviour
+
+- Links expire in 30 minutes and work once
+- Three requests per hour per account, silently enforced
+- `/auth/forgot` always returns the same response, so it cannot be used to
+  discover which addresses are registered
+- Resetting signs out every other session and invalidates any other outstanding
+  reset link
+- A "your password was changed" notice is always sent — that is how a user finds
+  out if the reset was not them

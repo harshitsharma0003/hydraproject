@@ -1,6 +1,8 @@
 'use strict';
 
 const { pool } = require('./db');
+const mailer = require('./mailer');
+const rid = require('./requestid');
 
 /**
  * Per-tenant cost telemetry from the first commit. Without it you learn your
@@ -61,6 +63,9 @@ async function record(tenantId, siteId, { cached, usage, embedTokens,
      cached ? 1 : 0, usage?.input_tokens || 0, usage?.output_tokens || 0,
      embedTokens || 0, Math.round(cost),
      environment, billable, degraded ? 1 : 0]);
+
+  // Only production counts toward the quota the merchant pays for.
+  if (billable) checkThresholds(tenantId, siteId).catch(() => {});
 }
 
 /**
@@ -77,4 +82,40 @@ async function overQuota(tenantId, quota, overageAllowed) {
   return Number(rows[0]?.n || 0) >= quota;
 }
 
-module.exports = { record, overQuota };
+/**
+ * Fires once per threshold per period. Without the warned_80/warned_100 flags
+ * this would email on every request after the line is crossed.
+ */
+async function checkThresholds(tenantId, siteId) {
+  const period = new Date(); period.setDate(1);
+  const p = period.toISOString().slice(0, 10);
+
+  const { rows: [row] } = await pool.query(
+    `SELECT l.monthly_query_quota AS cap, t.contact_email, t.company,
+            COALESCE(sum(m.queries_total) FILTER (WHERE m.billable),0) AS used,
+            bool_or(m.warned_80) AS w80, bool_or(m.warned_100) AS w100
+       FROM licenses l
+       JOIN tenants t ON t.id = l.tenant_id
+       LEFT JOIN usage_meter m ON m.tenant_id = l.tenant_id AND m.period = $2
+      WHERE l.tenant_id = $1 AND l.status = 'active'
+      GROUP BY l.monthly_query_quota, t.contact_email, t.company`, [tenantId, p]);
+
+  if (!row?.cap || !row.contact_email) return;
+  const pct = Math.round(100 * Number(row.used) / Number(row.cap));
+
+  const fire = async (col, threshold) => {
+    await mailer.send('quota_warning', row.contact_email, {
+      pct: threshold, used: Number(row.used), cap: Number(row.cap),
+      company: row.company || 'Your account'
+    }, { tenantId });
+    await pool.query(
+      `UPDATE usage_meter SET ${col} = true WHERE tenant_id=$1 AND period=$2`,
+      [tenantId, p]);
+    rid.info('quota.warned', { tenantId, threshold });
+  };
+
+  if (pct >= 100 && !row.w100) await fire('warned_100', 100);
+  else if (pct >= 80 && !row.w80) await fire('warned_80', 80);
+}
+
+module.exports = { record, overQuota, checkThresholds };

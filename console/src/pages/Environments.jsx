@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { useToast } from '../Toast';
 
 const ENV_LABEL = { production: 'Production', uat: 'UAT', sandbox: 'Sandbox' };
 
@@ -11,6 +12,7 @@ const ENV_NOTE = {
 };
 
 export default function Environments() {
+  const { notify, confirm } = useToast();
   const [data, setData] = useState(null);
   const [active, setActive] = useState(null);
   const [revealed, setRevealed] = useState(null);
@@ -41,18 +43,23 @@ export default function Environments() {
     ? Math.round(100 * env.cached_this_period / env.queries_this_period) : 0;
 
   async function rotate(kind) {
-    if (!confirm(`Rotate the ${kind} key? The old one keeps working for 24 hours.`)) return;
+    const ok = await confirm(
+      `Rotate the ${kind} key? The old one keeps working for 24 hours so your `
+      + `storefront stays up while you update it.`, 'Rotate');
+    if (!ok) return;
     setBusy(true);
     const r = await api.rotateKey(env.site_id, kind);
     setBusy(false);
-    if (r?.ok) { setRevealed(r); load(); }
+    if (r?.ok) { setRevealed(r); notify('New key issued. Copy it now.', 'success'); load(); }
+    else notify('Could not rotate the key.', 'danger');
   }
 
   async function flush() {
     setBusy(true);
     const r = await api.flushCache(env.site_id);
     setBusy(false);
-    if (r?.ok) alert(`Flushed ${r.flushed} cached queries.`);
+    if (r?.ok) notify(`Flushed ${r.flushed} cached queries.`, 'success');
+    else notify('Could not flush the cache.', 'danger');
   }
 
   return (

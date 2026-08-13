@@ -97,3 +97,14 @@ button.link { background:none; color:var(--accent); padding:0; text-align:left; 
          width:440px; }
 .panel code { display:block; padding:10px; background:var(--bg); border-radius:8px;
               font-size:13px; word-break:break-all; margin-top:4px; }
+.toasts { position:fixed; bottom:20px; right:20px; display:flex; flex-direction:column;
+          gap:8px; z-index:50; }
+.toast { background:#2C2C2A; color:#fff; padding:11px 16px; border-radius:10px;
+         font-size:14px; max-width:340px; cursor:pointer; }
+.toast.success { background:#0F6E56; }
+.toast.danger  { background:#A32D2D; }
+.scrim { position:fixed; inset:0; background:rgba(0,0,0,.4); display:grid;
+         place-items:center; z-index:60; }
+.dialog { background:#fff; border-radius:12px; padding:24px; width:400px; }
+.dialog p { margin:0 0 18px; }
+.dialog-actions { display:flex; gap:12px; justify-content:flex-end; align-items:center; }

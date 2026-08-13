@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { api } from '../api';
 
 export default function Login() {
@@ -34,6 +34,7 @@ export default function Login() {
         </label>
         {error && <p className="error">{error}</p>}
         <button type="submit">Sign in</button>
+        <p className="muted"><Link to="/forgot">Forgot your password?</Link></p>
       </form>
     </div>
   );

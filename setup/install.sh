@@ -231,6 +231,20 @@ JWT_SECRET=$(pwgen -s 48 1)
 BOOTSTRAP_SECRET=$(pwgen -s 48 1)
 CONSOLE_ORIGIN=https://${DOMAIN:-localhost}
 
+# Email. Set EMAIL_PROVIDER to smtp/resend/postmark/sendgrid before going live -
+# password reset and invites do nothing on 'console'.
+EMAIL_PROVIDER=console
+EMAIL_FROM=Hydra <no-reply@${DOMAIN:-localhost}>
+EMAIL_REPLY_TO=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+RESEND_API_KEY=
+POSTMARK_TOKEN=
+SENDGRID_API_KEY=
+
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 
@@ -423,21 +437,24 @@ cat <<EOF
       sudo -u hydra nano ${APP_ROOT}/gateway/.env
       (ANTHROPIC_API_KEY and VOYAGE_API_KEY are both required)
 
- 2. Start:
+ 2. Set EMAIL_PROVIDER (smtp/resend/postmark/sendgrid). On 'console' the
+    password reset and invite emails print to the log and are never delivered.
+
+ 3. Start:
       sudo systemctl start hydra-gateway hydra-ingest hydra-embed
 
- 3. Check:
+ 4. Check:
       curl localhost:8080/health
       sudo journalctl -u hydra-gateway -f
 
- 4. Verify tenant isolation BEFORE onboarding a second customer:
+ 5. Verify tenant isolation BEFORE onboarding a second customer:
       sudo -u postgres psql -d ${DB_NAME} -c "\\
         SET ROLE ${DB_APP_USER}; \\
         SELECT set_config('hydra.tenant_id','<tenant-uuid>',false); \\
         SELECT count(*) FROM hydra.products;"
       It must return only that tenant's rows.
 
- 5. Create a merchant SFTP account:
+ 6. Create a merchant SFTP account:
       sudo hydra-sftp-user acme_prod /path/to/their_key.pub
 
  Redeploy after pushing to git:

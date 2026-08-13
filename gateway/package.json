@@ -17,6 +17,7 @@
     "express": "^4.21.2",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.9.16",
     "pg": "^8.13.1",
     "pg-copy-streams": "^6.0.6",
     "stripe": "^17.5.0"

@@ -29,6 +29,7 @@ const { pipeline } = require('stream/promises');
 const copyFrom = require('pg-copy-streams').from;
 
 const { pool, withTenant } = require('../db');
+const mailer = require('../mailer');
 
 const SFTP_ROOT = process.env.SFTP_ROOT || '/srv/hydra/sftp';
 const POLL_MS = parseInt(process.env.INGEST_POLL_MS || '15000', 10);
@@ -187,6 +188,19 @@ async function processJob({ sftpUser, jobId, dir }) {
       `UPDATE ingest_jobs SET state='failed', error=$2, updated_at=now() WHERE id=$1`,
       [jobId, e.message]);
     console.error(`[ingest] job ${jobId} FAILED:`, e.message);
+
+    // A silent sync failure means stale results with nobody aware. Tell them.
+    try {
+      const { rows: [ctx] } = await pool.query(
+        `SELECT t.contact_email, s.external_site_id
+           FROM sites s JOIN tenants t ON t.id = s.tenant_id
+          WHERE s.id = $1`, [job.site_id]);
+      if (ctx?.contact_email) {
+        await mailer.send('sync_failed', ctx.contact_email,
+          { site: ctx.external_site_id, error: e.message },
+          { tenantId: job.tenant_id });
+      }
+    } catch (mailErr) { /* never let alerting break error handling */ }
     // Kept on disk so the merchant's export can be inspected rather than lost.
     await move(dir, path.join(SFTP_ROOT, sftpUser, 'failed', jobId)).catch(() => {});
   } finally {

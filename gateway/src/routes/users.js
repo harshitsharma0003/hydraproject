@@ -4,6 +4,7 @@ const express = require('express');
 const crypto = require('crypto');
 const { pool, withTenant } = require('../db');
 const rbac = require('../rbac');
+const mailer = require('../mailer');
 
 const router = express.Router();
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest();
@@ -68,11 +69,24 @@ router.post('/users/invite', rbac.require('users:write'), async (req, res) => {
   rbac.audit(req, 'user.invited', { targetType: 'email', targetId: email,
     detail: { role, siteIds } });
 
-  // TODO: send the email. Until the mailer exists the link is returned so it
-  // can be delivered manually - deliberately visible rather than silently lost.
+  const { rows: [t] } = await pool.query(
+    'SELECT company FROM tenants WHERE id=$1', [req.user.tenant_id]);
+
+  const mail = await mailer.send('user_invited', email, {
+    url: `${process.env.CONSOLE_ORIGIN}/accept?token=${token}`,
+    inviter: req.user.name || req.user.email,
+    company: t?.company || 'their Hydra account',
+    role
+  }, { tenantId: req.user.tenant_id });
+
+  // The link is still returned when delivery fails, so a mail outage never
+  // blocks onboarding a colleague.
   res.json({ ok: true, inviteId: inv.id, expiresAt: inv.expires_at,
-    inviteUrl: `${process.env.CONSOLE_ORIGIN}/accept?token=${token}`,
-    note: 'Email delivery is not wired yet. Send this link to the user.' });
+    emailed: mail.ok,
+    inviteUrl: mail.ok ? undefined
+      : `${process.env.CONSOLE_ORIGIN}/accept?token=${token}`,
+    note: mail.ok ? 'Invite emailed.'
+      : 'Email delivery failed — send this link directly.' });
 });
 
 /** Public: accept an invite and set a password. */

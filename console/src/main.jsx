@@ -15,6 +15,9 @@ import Signup from './pages/Signup';
 import Users from './pages/Users';
 import Audit from './pages/Audit';
 import AcceptInvite from './pages/AcceptInvite';
+import Forgot from './pages/Forgot';
+import Reset from './pages/Reset';
+import { ToastProvider } from './Toast';
 import './styles.css';
 
 const Private = ({ children }) =>
@@ -22,10 +25,13 @@ const Private = ({ children }) =>
 
 createRoot(document.getElementById('root')).render(
   <BrowserRouter>
+    <ToastProvider>
     <Routes>
       <Route path="/welcome" element={<Landing />} />
       <Route path="/signup" element={<Signup />} />
       <Route path="/accept" element={<AcceptInvite />} />
+      <Route path="/forgot" element={<Forgot />} />
+      <Route path="/reset" element={<Reset />} />
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Private><App /></Private>}>
         <Route index element={<Environments />} />
@@ -39,5 +45,6 @@ createRoot(document.getElementById('root')).render(
         <Route path="usage" element={<Usage />} />
       </Route>
     </Routes>
+    </ToastProvider>
   </BrowserRouter>
 );
