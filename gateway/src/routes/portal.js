@@ -59,9 +59,17 @@ router.post('/signup', async (req, res) => {
     [result.tenantId, email]);
   const token = rbac.issueToken(u.id);
 
-  await mailer.send('welcome', email, {
-    name: company, publishableKey: result.publishableKey
-  }, { tenantId: result.tenantId });
+  // Best-effort only. A welcome email must never decide whether an account got
+  // created — the keys below are returned in the response regardless. Email is
+  // not wired up in every environment (provider 'console' sends nothing), so we
+  // swallow anything it throws instead of failing the signup.
+  try {
+    await mailer.send('welcome', email, {
+      name: company, publishableKey: result.publishableKey
+    }, { tenantId: result.tenantId });
+  } catch (e) {
+    console.error('[signup] welcome email failed (non-fatal):', e.message);
+  }
 
   // Keys are returned exactly once. They are stored hashed and cannot be
   // recovered afterwards - only rotated.

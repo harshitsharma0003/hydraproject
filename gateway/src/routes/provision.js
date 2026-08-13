@@ -24,12 +24,18 @@ async function provision({ name, platform, externalSiteId, tier = 'starter',
     const { rows: [tenant] } = await client.query(
       'INSERT INTO tenants (name) VALUES ($1) RETURNING id', [name]);
 
-    const quota = { starter: 100000, growth: 500000, enterprise: 5000000 }[tier];
+    // Every tier needs a quota. 'trial' was missing here, so a signup passed
+    // undefined -> NULL into a NOT NULL column and the whole request 500'd (a
+    // 502 at the proxy). The `|| 100000` fallback means an unrecognised tier can
+    // never reintroduce that crash.
+    const quota = { trial: 1000, starter: 100000, growth: 500000,
+                    enterprise: 5000000 }[tier] || 100000;
+    const narration = tier === 'growth' || tier === 'enterprise';
     await client.query(
       `INSERT INTO licenses (tenant_id, tier, monthly_query_quota,
                              narration_enabled, stripe_customer_id, stripe_sub_id)
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [tenant.id, tier, quota, tier !== 'starter', stripeCustomerId, stripeSubId]);
+      [tenant.id, tier, quota, narration, stripeCustomerId, stripeSubId]);
 
     const { rows: [site] } = await client.query(
       `INSERT INTO sites (tenant_id, external_site_id, platform, allowed_origins,
