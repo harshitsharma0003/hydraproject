@@ -177,3 +177,67 @@ This layout is right up to roughly 20–30 tenants. Beyond that, in order:
 4. Split the gateway behind a load balancer
 
 Only the ingest worker is pinned to the SFTP host, because it reads local disk.
+
+---
+
+## Secrets
+
+**Never put a key in `setup/install.sh` or anywhere else in this repo.** The
+repo is public; GitHub is scraped for committed credentials within minutes of a
+push. Secrets live only in `/opt/hydra/gateway/.env`, which is `chmod 600`,
+owned by `hydra`, and gitignored.
+
+### At install
+
+Environment variables are safer than flags — a flag is visible in shell history
+and in `ps` output while the process runs:
+
+```bash
+sudo POSTMARK_TOKEN=xxxxxxxx \
+     ANTHROPIC_API_KEY=sk-ant-xxxx \
+     VOYAGE_API_KEY=pa-xxxx \
+     bash setup/install.sh \
+       --domain hydra.yourdomain.com \
+       --email ops@yourdomain.com \
+       --email-provider postmark \
+       --email-from "Hydra <no-reply@mail.yourdomain.com>"
+```
+
+Flags exist too (`--postmark-token`, `--anthropic-key`, `--voyage-key`) but the
+installer warns when you use them.
+
+### After install
+
+```bash
+sudo hydra-set EMAIL_PROVIDER postmark
+sudo hydra-set POSTMARK_TOKEN xxxxxxxx
+```
+
+Writes to `.env` and restarts the services. Nothing to edit by hand.
+
+### Verify delivery before trusting it
+
+```bash
+sudo hydra-test-email you@example.com
+```
+
+Sends a real password-reset email through the configured provider. Do this
+before your first customer, not after they fail to reset their password.
+
+### If a key is ever exposed
+
+Rotate first, investigate second. Pasting a token into a chat, a ticket, or a
+commit all count as exposure — assume it is public from that moment.
+
+| Key | Rotate at |
+|---|---|
+| Postmark | Servers → your server → API Tokens |
+| Anthropic | console.anthropic.com → API keys |
+| Voyage | dashboard → API keys |
+| Hydra tenant keys | Console → Environments → Rotate |
+
+### DNS before the first real send
+
+`mail.yourdomain.com` needs SPF, DKIM and DMARC. Postmark gives you the exact
+records. Without them, password-reset emails land in spam and customers
+conclude the product is broken.

@@ -20,6 +20,16 @@ DOMAIN=""
 EMAIL=""
 REPO="${HYDRA_REPO:-https://github.com/harshitsharma0003/hydraproject.git}"
 BRANCH="${HYDRA_BRANCH:-main}"
+
+# Secrets are NEVER written into this file or committed. They arrive as flags or
+# environment variables and land only in /opt/hydra/gateway/.env (chmod 600).
+EMAIL_PROVIDER="${EMAIL_PROVIDER:-console}"
+EMAIL_FROM_ADDR="${EMAIL_FROM:-}"
+POSTMARK_TOKEN="${POSTMARK_TOKEN:-}"
+RESEND_API_KEY="${RESEND_API_KEY:-}"
+SENDGRID_API_KEY="${SENDGRID_API_KEY:-}"
+ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
+VOYAGE_API_KEY="${VOYAGE_API_KEY:-}"
 DB_NAME="hydra"
 DB_APP_USER="hydra_app"
 SFTP_ROOT="/srv/hydra/sftp"
@@ -33,6 +43,13 @@ while [[ $# -gt 0 ]]; do
     --email)  EMAIL="$2";  shift 2 ;;
     --repo)   REPO="$2";   shift 2 ;;
     --branch) BRANCH="$2"; shift 2 ;;
+    --email-provider) EMAIL_PROVIDER="$2"; shift 2 ;;
+    --email-from)     EMAIL_FROM_ADDR="$2"; shift 2 ;;
+    --postmark-token) POSTMARK_TOKEN="$2"; shift 2 ;;
+    --resend-key)     RESEND_API_KEY="$2"; shift 2 ;;
+    --sendgrid-key)   SENDGRID_API_KEY="$2"; shift 2 ;;
+    --anthropic-key)  ANTHROPIC_API_KEY="$2"; shift 2 ;;
+    --voyage-key)     VOYAGE_API_KEY="$2"; shift 2 ;;
     *) echo "unknown option: $1"; exit 1 ;;
   esac
 done
@@ -42,6 +59,18 @@ warn() { echo -e "\033[1;33m[warn]\033[0m $*"; }
 die()  { echo -e "\033[1;31m[fail]\033[0m $*"; exit 1; }
 
 [[ $EUID -eq 0 ]] || die "run as root (sudo bash install.sh)"
+
+# Passing a secret as a command-line argument leaves it in shell history and in
+# /proc for the life of the process. Prefer the environment-variable form:
+#   sudo POSTMARK_TOKEN=xxx bash setup/install.sh --email-provider postmark
+if [[ -n "$POSTMARK_TOKEN$RESEND_API_KEY$SENDGRID_API_KEY$ANTHROPIC_API_KEY$VOYAGE_API_KEY" ]] \
+   && [[ "$*" == *"--postmark-token"* || "$*" == *"--resend-key"* \
+      || "$*" == *"--sendgrid-key"* || "$*" == *"--anthropic-key"* \
+      || "$*" == *"--voyage-key"* ]]; then
+  echo "note: secrets passed as flags are visible in shell history and ps output."
+  echo "      environment variables are safer: sudo POSTMARK_TOKEN=xxx bash setup/install.sh"
+  history -d "$((HISTCMD-1))" 2>/dev/null || true
+fi
 
 # ---------------------------------------------------------------------------
 log "1/10  Base packages"
@@ -217,13 +246,12 @@ PORT=8080
 NODE_ENV=production
 SFTP_ROOT=${SFTP_ROOT}
 
-# --- fill these in before starting ---
-ANTHROPIC_API_KEY=
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 INTENT_MODEL=claude-haiku-4-5-20251001
 NARRATION_MODEL=claude-sonnet-4-6
 
 EMBEDDING_PROVIDER=voyage
-VOYAGE_API_KEY=
+VOYAGE_API_KEY=${VOYAGE_API_KEY}
 EMBEDDING_MODEL=voyage-3
 EMBEDDING_DIM=1024
 
@@ -233,17 +261,18 @@ CONSOLE_ORIGIN=https://${DOMAIN:-localhost}
 
 # Email. Set EMAIL_PROVIDER to smtp/resend/postmark/sendgrid before going live -
 # password reset and invites do nothing on 'console'.
-EMAIL_PROVIDER=console
-EMAIL_FROM=Hydra <no-reply@${DOMAIN:-localhost}>
+EMAIL_PROVIDER=${EMAIL_PROVIDER}
+EMAIL_FROM=${EMAIL_FROM_ADDR:-Hydra <no-reply@mail.${DOMAIN:-localhost}>}
 EMAIL_REPLY_TO=
+POSTMARK_TOKEN=${POSTMARK_TOKEN}
+POSTMARK_STREAM=outbound
+RESEND_API_KEY=${RESEND_API_KEY}
+SENDGRID_API_KEY=${SENDGRID_API_KEY}
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER=
 SMTP_PASS=
-RESEND_API_KEY=
-POSTMARK_TOKEN=
-SENDGRID_API_KEY=
 
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
@@ -348,6 +377,45 @@ write_unit hydra-embed.service   "Hydra embedding worker"   "src/worker/embed.js
 systemctl daemon-reload
 systemctl enable hydra-gateway hydra-ingest hydra-embed
 
+# Set or change one secret without opening an editor. Values never touch the
+# repo, only /opt/hydra/gateway/.env.
+cat > /usr/local/bin/hydra-set <<'SETTER'
+#!/usr/bin/env bash
+# hydra-set KEY VALUE   — writes to the gateway .env and restarts services.
+set -euo pipefail
+ENV_FILE=/opt/hydra/gateway/.env
+KEY="$1"; shift
+VALUE="$*"
+[[ -f "$ENV_FILE" ]] || { echo "no $ENV_FILE"; exit 1; }
+if grep -q "^${KEY}=" "$ENV_FILE"; then
+  # In-place, using a temp file so a crash cannot truncate the env.
+  tmp=$(mktemp); grep -v "^${KEY}=" "$ENV_FILE" > "$tmp"
+  echo "${KEY}=${VALUE}" >> "$tmp"
+  install -o hydra -g hydra -m 600 "$tmp" "$ENV_FILE"; rm -f "$tmp"
+else
+  echo "${KEY}=${VALUE}" >> "$ENV_FILE"
+fi
+echo "set ${KEY}"
+systemctl restart hydra-gateway hydra-ingest hydra-embed 2>/dev/null || true
+SETTER
+chmod 750 /usr/local/bin/hydra-set
+
+# Send a real message end to end. Deliverability problems are much cheaper to
+# find now than when a customer cannot reset their password.
+cat > /usr/local/bin/hydra-test-email <<'TESTER'
+#!/usr/bin/env bash
+# hydra-test-email you@example.com
+set -euo pipefail
+cd /opt/hydra/gateway
+sudo -u hydra env $(grep -v '^#' .env | xargs -d '\n') node -e "
+const m = require('./src/mailer');
+m.send('password_reset', process.argv[1], { name: 'Test', url: 'https://example.com/reset?token=test' })
+  .then(r => { console.log(r.ok ? 'sent via ' + m.PROVIDER : 'FAILED: ' + r.error);
+               process.exit(r.ok ? 0 : 1); });
+" "$1"
+TESTER
+chmod 755 /usr/local/bin/hydra-test-email
+
 cat > /etc/logrotate.d/hydra <<EOF
 /var/log/hydra/*.log {
   daily
@@ -437,8 +505,13 @@ cat <<EOF
       sudo -u hydra nano ${APP_ROOT}/gateway/.env
       (ANTHROPIC_API_KEY and VOYAGE_API_KEY are both required)
 
- 2. Set EMAIL_PROVIDER (smtp/resend/postmark/sendgrid). On 'console' the
-    password reset and invite emails print to the log and are never delivered.
+ 2. Email is set to '${EMAIL_PROVIDER}'.
+    $( [[ "$EMAIL_PROVIDER" == "console" ]] \
+       && echo "WARNING: nothing is delivered on 'console'. Password reset and" \
+       && echo "    invites will silently do nothing. Set a real provider:" \
+       && echo "      sudo hydra-set EMAIL_PROVIDER postmark" \
+       && echo "      sudo hydra-set POSTMARK_TOKEN <token>" \
+       || echo "Verify delivery:  sudo hydra-test-email you@example.com" )
 
  3. Start:
       sudo systemctl start hydra-gateway hydra-ingest hydra-embed

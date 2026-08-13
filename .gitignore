@@ -1,0 +1,15 @@
+node_modules/
+dist/
+build/
+*.log
+.env
+.env.*
+!.env.example
+/tmp/
+*.dump
+*.tar.gz
+.DS_Store
+.vscode/
+.idea/
+coverage/
+*.pid
