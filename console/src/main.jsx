@@ -12,6 +12,9 @@ import Environments from './pages/Environments';
 import Billing from './pages/Billing';
 import Landing from './pages/Landing';
 import Signup from './pages/Signup';
+import Users from './pages/Users';
+import Audit from './pages/Audit';
+import AcceptInvite from './pages/AcceptInvite';
 import './styles.css';
 
 const Private = ({ children }) =>
@@ -22,11 +25,14 @@ createRoot(document.getElementById('root')).render(
     <Routes>
       <Route path="/welcome" element={<Landing />} />
       <Route path="/signup" element={<Signup />} />
+      <Route path="/accept" element={<AcceptInvite />} />
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Private><App /></Private>}>
         <Route index element={<Environments />} />
         <Route path="sites" element={<Sites />} />
         <Route path="billing" element={<Billing />} />
+        <Route path="users" element={<Users />} />
+        <Route path="audit" element={<Audit />} />
         <Route path="rules" element={<Rules />} />
         <Route path="queries" element={<Queries />} />
         <Route path="syncs" element={<Syncs />} />

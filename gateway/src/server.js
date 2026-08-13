@@ -26,6 +26,7 @@ app.use('/v1', require('./routes/event'));
 app.use('/v1', require('./routes/health'));
 app.use('/v1', require('./routes/bulk'));
 app.use('/v1', require('./routes/provision').router);
+app.use('/api', require('./routes/users'));
 app.use('/api', require('./routes/portal').router);
 app.use('/api', require('./routes/admin').router);
 

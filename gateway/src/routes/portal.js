@@ -1,7 +1,6 @@
 'use strict';
 
 const express = require('express');
-const jwt = require('jsonwebtoken');
 const Stripe = require('stripe');
 const { pool, withTenant } = require('../db');
 const { issueKey } = require('../auth');
@@ -18,13 +17,8 @@ const PLANS = {
   enterprise: { fee: 225000000000, included: 1000000, label: 'Enterprise' }
 };
 
-function requireConsole(req, res, next) {
-  const auth = req.get('Authorization') || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-  if (!token) return res.status(401).json({ ok: false });
-  try { req.console = jwt.verify(token, process.env.JWT_SECRET); next(); }
-  catch (e) { res.status(401).json({ ok: false }); }
-}
+const rbac = require('../rbac');
+const requireConsole = rbac.authenticate;
 
 /* ------------------------------------------------------------------ *
  * Signup — creates a trial tenant with a sandbox only.
@@ -59,8 +53,10 @@ router.post('/signup', async (req, res) => {
      VALUES ($1,$2,crypt($3, gen_salt('bf')),'owner',$4)`,
     [result.tenantId, email, password, company || null]);
 
-  const token = jwt.sign({ tenantId: result.tenantId, email, role: 'owner' },
-    process.env.JWT_SECRET, { expiresIn: '12h' });
+  const { rows: [u] } = await pool.query(
+    'SELECT id FROM console_users WHERE tenant_id=$1 AND email=$2',
+    [result.tenantId, email]);
+  const token = rbac.issueToken(u.id);
 
   // Keys are returned exactly once. They are stored hashed and cannot be
   // recovered afterwards - only rotated.
@@ -75,24 +71,24 @@ router.post('/signup', async (req, res) => {
  * Environments — what the portal tabs render
  * ------------------------------------------------------------------ */
 
-router.get('/environments', requireConsole, async (req, res) => {
-  const detail = await withTenant(req.console.tenantId, (c) => c.query(
+router.get('/environments', requireConsole, rbac.require('sites:read'), async (req, res) => {
+  const detail = await withTenant(req.user.tenant_id, (c) => c.query(
     `SELECT * FROM environment_detail WHERE tenant_id=$1
       ORDER BY CASE environment WHEN 'production' THEN 0
                                 WHEN 'uat' THEN 1 ELSE 2 END`,
-    [req.console.tenantId]));
+    [req.user.tenant_id]));
 
   const keys = await pool.query(
     `SELECT k.id, k.site_id, k.kind, k.prefix, k.last4, k.label,
             k.last_used_at, k.created_at
        FROM api_keys k WHERE k.tenant_id=$1 AND k.revoked_at IS NULL
-      ORDER BY k.created_at`, [req.console.tenantId]);
+      ORDER BY k.created_at`, [req.user.tenant_id]);
 
   const { rows: [lic] } = await pool.query(
     `SELECT tier, included_queries, monthly_query_quota, nonprod_monthly_query_cap,
             overage_price_micros, currency, platform_fee_micros, status
        FROM licenses WHERE tenant_id=$1 AND status IN ('active','past_due')
-      LIMIT 1`, [req.console.tenantId]);
+      LIMIT 1`, [req.user.tenant_id]);
 
   res.json({
     ok: true,
@@ -109,10 +105,10 @@ router.get('/environments', requireConsole, async (req, res) => {
  * Rotate. There is no "reveal" - the stored value is a hash. The new key is
  * shown once here and never again.
  */
-router.post('/keys/rotate', requireConsole, async (req, res) => {
+router.post('/keys/rotate', requireConsole, rbac.require('keys:rotate'), rbac.requireSite, async (req, res) => {
   const { siteId, kind } = req.body || {};
   const { rows: [site] } = await pool.query(
-    'SELECT id FROM sites WHERE id=$1 AND tenant_id=$2', [siteId, req.console.tenantId]);
+    'SELECT id FROM sites WHERE id=$1 AND tenant_id=$2', [siteId, req.user.tenant_id]);
   if (!site) return res.status(404).json({ ok: false });
 
   const k = issueKey(kind === 'secret' ? 'secret' : 'publishable');
@@ -127,12 +123,15 @@ router.post('/keys/rotate', requireConsole, async (req, res) => {
     await client.query(
       `INSERT INTO api_keys (tenant_id, site_id, kind, prefix, key_hash, last4)
        VALUES ($1,$2,$3,$4,$5,$6)`,
-      [req.console.tenantId, siteId, kind, k.prefix, k.hash, k.full.slice(-4)]);
+      [req.user.tenant_id, siteId, kind, k.prefix, k.hash, k.full.slice(-4)]);
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK');
     return res.status(500).json({ ok: false });
   } finally { client.release(); }
+
+  rbac.audit(req, 'keys.rotated', { targetType: 'site', targetId: siteId,
+    siteId, detail: { kind } });
 
   res.json({ ok: true, key: k.full,
     note: 'Copy this now. It is stored hashed and cannot be shown again. '
@@ -143,18 +142,18 @@ router.post('/keys/rotate', requireConsole, async (req, res) => {
  * Billing
  * ------------------------------------------------------------------ */
 
-router.get('/billing', requireConsole, async (req, res) => {
-  const summary = await withTenant(req.console.tenantId, (c) => c.query(
+router.get('/billing', requireConsole, rbac.require('billing:read'), async (req, res) => {
+  const summary = await withTenant(req.user.tenant_id, (c) => c.query(
     `SELECT * FROM billing_summary WHERE tenant_id=$1
-      ORDER BY period DESC NULLS LAST LIMIT 12`, [req.console.tenantId]));
+      ORDER BY period DESC NULLS LAST LIMIT 12`, [req.user.tenant_id]));
 
   const { rows: invoices } = await pool.query(
     `SELECT period, currency, total_micros, status, issued_at, paid_at
        FROM invoices WHERE tenant_id=$1 ORDER BY period DESC LIMIT 12`,
-    [req.console.tenantId]);
+    [req.user.tenant_id]);
 
   const { rows: [bal] } = await pool.query(
-    'SELECT credit_balance($1) AS credits', [req.console.tenantId]);
+    'SELECT credit_balance($1) AS credits', [req.user.tenant_id]);
 
   res.json({
     ok: true,
@@ -166,7 +165,7 @@ router.get('/billing', requireConsole, async (req, res) => {
 });
 
 /** Stripe Checkout for a plan upgrade. */
-router.post('/checkout', requireConsole, async (req, res) => {
+router.post('/checkout', requireConsole, rbac.require('billing:write'), async (req, res) => {
   if (!stripe) return res.status(503).json({ ok: false, error: 'billing_unavailable' });
   const { tier } = req.body || {};
   if (!PLANS[tier] || tier === 'trial') {
@@ -174,22 +173,22 @@ router.post('/checkout', requireConsole, async (req, res) => {
   }
 
   const { rows: [t] } = await pool.query(
-    'SELECT contact_email, company FROM tenants WHERE id=$1', [req.console.tenantId]);
+    'SELECT contact_email, company FROM tenants WHERE id=$1', [req.user.tenant_id]);
 
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
-    customer_email: t?.contact_email || req.console.email,
+    customer_email: t?.contact_email || req.user.email,
     line_items: [{ price: process.env[`STRIPE_PRICE_${tier.toUpperCase()}`], quantity: 1 }],
     success_url: `${process.env.CONSOLE_ORIGIN}/billing?upgraded=1`,
     cancel_url: `${process.env.CONSOLE_ORIGIN}/billing`,
-    metadata: { tenantId: req.console.tenantId, tier }
+    metadata: { tenantId: req.user.tenant_id, tier }
   });
 
   res.json({ ok: true, url: session.url });
 });
 
 /** Prepaid overage blocks — a purchase order, not a surprise invoice. */
-router.post('/credits/purchase', requireConsole, async (req, res) => {
+router.post('/credits/purchase', requireConsole, rbac.require('billing:write'), async (req, res) => {
   if (!stripe) return res.status(503).json({ ok: false });
   const { blocks = 1 } = req.body || {};
 
@@ -198,7 +197,7 @@ router.post('/credits/purchase', requireConsole, async (req, res) => {
     line_items: [{ price: process.env.STRIPE_PRICE_CREDIT_BLOCK, quantity: blocks }],
     success_url: `${process.env.CONSOLE_ORIGIN}/billing?credits=1`,
     cancel_url: `${process.env.CONSOLE_ORIGIN}/billing`,
-    metadata: { tenantId: req.console.tenantId, kind: 'credits', blocks: String(blocks) }
+    metadata: { tenantId: req.user.tenant_id, kind: 'credits', blocks: String(blocks) }
   });
 
   res.json({ ok: true, url: session.url });

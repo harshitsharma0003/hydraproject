@@ -290,6 +290,10 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA hydra
 ALTER DEFAULT PRIVILEGES IN SCHEMA hydra
   GRANT USAGE, SELECT ON SEQUENCES TO ${DB_APP_USER};
 ALTER ROLE ${DB_APP_USER} SET search_path = hydra, public;
+
+-- Audit log is append-only. Revoking UPDATE and DELETE at the grant level means
+-- even a compromised application cannot rewrite history.
+REVOKE UPDATE, DELETE ON hydra.audit_log FROM ${DB_APP_USER};
 EOF
 
 # ---------------------------------------------------------------------------

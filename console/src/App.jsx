@@ -16,6 +16,8 @@ export default function App() {
           <NavLink to="/syncs">Syncs</NavLink>
           <NavLink to="/usage">Usage</NavLink>
           <NavLink to="/billing">Billing</NavLink>
+          <NavLink to="/users">Users</NavLink>
+          <NavLink to="/audit">Audit</NavLink>
         </nav>
         <button className="link" onClick={logout}>Sign out</button>
       </aside>

@@ -239,3 +239,68 @@ you most need it to respond.
 6. Add per-key rate limiting (B12)
 7. Load-test sync with a realistic catalog (B8)
 8. Tune the widening ladder against real data (B9)
+
+---
+
+# PART C — Roles and access
+
+## Role matrix
+
+| | Owner | Admin | Developer | Merchandiser | Viewer |
+|---|:-:|:-:|:-:|:-:|:-:|
+| View sites, rules, queries, syncs | ● | ● | ● | ● | ● |
+| Edit merchandising rules | ● | ● | | ● | |
+| Flush cache | ● | ● | ● | ● | |
+| Rotate API keys | ● | ● | ● | | |
+| Trigger syncs | ● | ● | ● | | |
+| Manage users | ● | ● | | | |
+| Grant the owner role | ● | | | | |
+| Change plan, buy credits | ● | | | | |
+| Read audit log | ● | ● | | | |
+| Delete the account | ● | | | | |
+
+**Developer, merchandiser and viewer can be scoped to specific sites.** No
+assignment means tenant-wide. Owners and admins always see everything.
+
+## Guarantees enforced in the database, not the application
+
+- **The last owner cannot be removed, demoted or suspended.** A trigger raises,
+  so it holds even for a route added later that forgets to check.
+- **Only an owner can create another owner.** Otherwise an admin could escalate
+  by inviting an owner account they control.
+- **Nobody can change or suspend their own role**, which prevents locking
+  yourself out and prevents self-escalation in one rule.
+- **The audit log is append-only.** `hydra_app` has no `UPDATE` or `DELETE`
+  grant on it, so a compromised gateway cannot rewrite history.
+
+## Revocation is immediate
+
+Tokens carry only a user id. Role, status and tenant are read from the database
+on every request, and any role change, suspension or password change bumps
+`token_valid_from`, which invalidates every token issued before it.
+
+The earlier design put the role inside the JWT, which meant a demoted user kept
+their old permissions for up to 12 hours. That is fixed.
+
+## Login protection
+
+Five failed attempts locks an account for fifteen minutes. Every failure mode —
+unknown email, wrong password, locked, suspended — returns the same response, so
+the login form cannot be used to discover which addresses are registered.
+
+## Invitations
+
+Invite tokens are stored hashed, expire in 7 days and work once. Treat an invite
+link like a password.
+
+**Email delivery is not built yet.** The invite endpoint returns the link and
+the UI displays it, so the flow works today by sending it manually. This is
+deliberate rather than silently failing, but it is the first thing to wire up
+when the mailer exists.
+
+## Platform staff
+
+`platform_staff` and `impersonation_sessions` exist for your own team:
+cross-tenant, read-only by default, with time-boxed and audited impersonation.
+**The routes for these are not built.** The tables are there so support access
+is designed in rather than retrofitted, but for now your team uses psql.

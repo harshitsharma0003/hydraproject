@@ -29,6 +29,17 @@ export const api = {
   flushCache: (siteId) =>
     call('/api/console/cache/flush', { method: 'POST', body: JSON.stringify({ siteId }) }),
   billing: () => call('/api/billing'),
+  users:   () => call('/api/users'),
+  inviteUser: (b) => call('/api/users/invite', { method: 'POST', body: JSON.stringify(b) }),
+  acceptInvite: (b) => call('/api/invites/accept', { method: 'POST', body: JSON.stringify(b) }),
+  setUserRole: (id, role) =>
+    call(`/api/users/${id}/role`, { method: 'POST', body: JSON.stringify({ role }) }),
+  setUserSites: (id, siteIds) =>
+    call(`/api/users/${id}/sites`, { method: 'POST', body: JSON.stringify({ siteIds }) }),
+  suspendUser: (id) => call(`/api/users/${id}/suspend`, { method: 'POST' }),
+  reactivateUser: (id) => call(`/api/users/${id}/reactivate`, { method: 'POST' }),
+  revokeInvite: (id) => call(`/api/users/invites/${id}/revoke`, { method: 'POST' }),
+  audit:   () => call('/api/audit'),
   checkout: (tier) =>
     call('/api/checkout', { method: 'POST', body: JSON.stringify({ tier }) }),
   buyCredits: (blocks) =>
