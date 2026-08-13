@@ -33,15 +33,15 @@ async function loadTaxonomy(siteId, locale) {
 }
 
 router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (req, res) => {
-  const { tenant_id: tenantId, site_id: siteId } = req.hydra;
+  const { tenant_id: tenantId, site_id: siteId } = req.algivo;
   const { q, locale, currency, priorIntent } = req.body || {};
 
   if (!q || typeof q !== 'string') {
     return res.json({ ok: false, error: 'empty_query' });
   }
 
-  if (await meter.overQuota(tenantId, req.hydra.monthly_query_quota,
-                            req.hydra.overage_allowed)) {
+  if (await meter.overQuota(tenantId, req.algivo.monthly_query_quota,
+                            req.algivo.overage_allowed)) {
     // Soft-fail. The storefront falls back to native search.
     return res.status(200).json({ ok: false, error: 'quota_exceeded' });
   }
@@ -62,7 +62,7 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
 
   // Explicit bypass, for a developer iterating on prompts against a sandbox
   // whose cache never expires.
-  const noCache = req.get('X-Hydra-No-Cache') === '1';
+  const noCache = req.get('X-Algivo-No-Cache') === '1';
 
   const normalised = intentLib.normaliseQuery(q);
   const key = intentLib.cacheKey({
@@ -147,12 +147,12 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
      JSON.stringify(intent), String(TOKEN_TTL_MIN)]));
 
   meter.record(tenantId, siteId, { cached, usage,
-    environment: req.hydra.environment,
-    billable: req.hydra.billable }).catch(() => {});
+    environment: req.algivo.environment,
+    billable: req.algivo.billable }).catch(() => {});
 
   // Narration is tier-gated: it roughly doubles per-query model cost and is
   // the cleanest lever available.
-  if (!req.hydra.narration_enabled) delete intent.narration;
+  if (!req.algivo.narration_enabled) delete intent.narration;
 
   res.json({
     ok: true,
@@ -164,7 +164,7 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
     // Surfaced so a merchant can confirm at a glance which key they pasted.
     // Pasting the production key on a sandbox instance is a common mistake and
     // an expensive one.
-    environment: req.hydra.environment
+    environment: req.algivo.environment
   });
 });
 

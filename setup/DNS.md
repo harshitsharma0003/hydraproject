@@ -19,7 +19,7 @@ on, and the two can be rate-limited and monitored independently.
 
 `sftp` is a convenience alias — SFTP rides port 22 on the same box.
 
-## Email — `mail.thinkvisor.io`
+## Email — `mail.algivo.thinkvisor.io`
 
 Sending from a subdomain keeps your corporate mail reputation isolated. If a
 send goes wrong, `@thinkvisor.io` is unaffected.
@@ -43,8 +43,8 @@ emails land in spam and the customer concludes the product is broken.
 
 ```bash
 sudo bash setup/install.sh \
-  --domain app.thinkvisor.io \
-  --api-domain api.thinkvisor.io \
+  --domain algivo.thinkvisor.io \
+  --api-domain api.algivo.thinkvisor.io \
   --email ops@thinkvisor.io
 ```
 
@@ -54,8 +54,8 @@ read automatically, so no flags are needed for the Postmark token.
 ## Verify
 
 ```bash
-curl https://api.thinkvisor.io/health
-sudo hydra-test-email you@thinkvisor.io
+curl https://api.algivo.thinkvisor.io/health
+sudo algivo-test-email you@thinkvisor.io
 ```
 
 The second sends a real password-reset email through Postmark. Run it before
@@ -63,8 +63,8 @@ your first customer, not after they fail to reset a password.
 
 ## What merchants configure
 
-**SFCC** — `hydra.gateway.cred` URL is `https://api.thinkvisor.io`,
-`hydra.sftp.cred` host is `sftp.thinkvisor.io`. Both are pre-filled in the
+**SFCC** — `algivo.gateway.cred` URL is `https://api.algivo.thinkvisor.io`,
+`algivo.sftp.cred` host is `sftp.algivo.thinkvisor.io`. Both are pre-filled in the
 shipped `services.xml`; only the SFTP username changes per merchant.
 
 **Shopify** — nothing. OAuth provisions keys automatically.

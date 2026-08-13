@@ -19,13 +19,13 @@ const DIR = path.join(__dirname, '..', '..', 'db', 'migrations');
   });
 
   await pool.query(`
-    CREATE SCHEMA IF NOT EXISTS hydra;
-    CREATE TABLE IF NOT EXISTS hydra.schema_migrations (
+    CREATE SCHEMA IF NOT EXISTS algivo;
+    CREATE TABLE IF NOT EXISTS algivo.schema_migrations (
       filename text PRIMARY KEY,
       applied_at timestamptz NOT NULL DEFAULT now()
     )`);
 
-  const { rows } = await pool.query('SELECT filename FROM hydra.schema_migrations');
+  const { rows } = await pool.query('SELECT filename FROM algivo.schema_migrations');
   const done = new Set(rows.map((r) => r.filename));
   const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.sql')).sort();
 
@@ -38,7 +38,7 @@ const DIR = path.join(__dirname, '..', '..', 'db', 'migrations');
       await client.query('BEGIN');
       await client.query(sql);
       await client.query(
-        'INSERT INTO hydra.schema_migrations (filename) VALUES ($1)', [f]);
+        'INSERT INTO algivo.schema_migrations (filename) VALUES ($1)', [f]);
       await client.query('COMMIT');
       console.log('  ok');
     } catch (e) {

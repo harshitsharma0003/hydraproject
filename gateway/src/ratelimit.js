@@ -15,7 +15,7 @@ const { pool } = require('./db');
 const LIMITS = { starter: 300, growth: 1200, enterprise: 6000 };
 
 function rateLimit(req, res, next) {
-  const key = req.hydra;
+  const key = req.algivo;
   if (!key) return next();
 
   const limit = LIMITS[key.tier] || LIMITS.starter;

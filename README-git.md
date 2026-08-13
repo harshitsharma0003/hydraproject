@@ -1,6 +1,6 @@
-# Hydra — platform
+# Algivo — platform
 
-The backend, database and merchant console for Hydra AI merchandising.
+The backend, database and merchant console for Algivo AI merchandising.
 Everything runs on a single VM: PostgreSQL + pgvector, SFTP catalog drop,
 gateway API, two background workers, and the console.
 
@@ -15,15 +15,15 @@ Ubuntu 22.04 or 24.04, 4 vCPU / 8 GB RAM minimum.
 
 ```bash
 sudo apt update && sudo apt install -y git
-git clone https://github.com/harshitsharma0003/hydraproject.git /tmp/hydra
-sudo bash /tmp/hydra/setup/install.sh \
-  --domain hydra.yourdomain.com --email ops@yourdomain.com
+git clone https://github.com/harshitsharma0003/hydraproject.git /tmp/algivo
+sudo bash /tmp/algivo/setup/install.sh \
+  --domain algivo.yourdomain.com --email ops@yourdomain.com
 ```
 
-The installer clones this repo to `/opt/hydra`, so redeploys are:
+The installer clones this repo to `/opt/algivo`, so redeploys are:
 
 ```bash
-sudo hydra-update
+sudo algivo-update
 ```
 
 Full detail: [`setup/README.md`](setup/README.md).
@@ -52,7 +52,7 @@ POST /v1/query
 ```
 
 The gateway returns **product IDs, never products and never prices**. The
-storefront hydrates them inside the shopper's own session, so price book,
+storefront algivotes them inside the shopper's own session, so price book,
 customer group and active promotions all resolve correctly.
 
 ## Bulk ingest
@@ -61,8 +61,8 @@ customer group and active promotions all resolve correctly.
 storefront  -> /v1/bulk/begin        opens a job, returns an SFTP drop path
             -> chunk-00001.ndjson.gz gzipped NDJSON, 20k rows each
             -> manifest.json LAST    the trigger
-hydra-ingest -> checksums, COPY into staging, promote
-hydra-embed  -> claims batches, writes vectors, closes the job
+algivo-ingest -> checksums, COPY into staging, promote
+algivo-embed  -> claims batches, writes vectors, closes the job
 ```
 
 Nothing ingests until the manifest lands, so an interrupted upload leaves the

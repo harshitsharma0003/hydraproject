@@ -117,7 +117,7 @@ async function requireSite(req, res, next) {
 
 /**
  * Audit. Fire-and-forget so a logging failure never blocks the action, but
- * every state change calls it. Append-only: hydra_app has no UPDATE or DELETE
+ * every state change calls it. Append-only: algivo_app has no UPDATE or DELETE
  * grant on this table.
  */
 function audit(req, action, extra = {}) {

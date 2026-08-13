@@ -27,7 +27,7 @@ const TOKEN_TTL_MIN = parseInt(process.env.TOKEN_TTL_MINUTES || '30', 10);
  * Never cached: a refinement is by definition contextual to one session.
  */
 router.post('/refine', versionGate, requireKey('publishable'), rateLimit, async (req, res) => {
-  const { tenant_id: tenantId, site_id: siteId } = req.hydra;
+  const { tenant_id: tenantId, site_id: siteId } = req.algivo;
   const { token, chip, q, locale, currency, priorIntent } = req.body || {};
 
   // Prefer the server-side token record over anything the client sent.
@@ -87,10 +87,10 @@ router.post('/refine', versionGate, requireKey('publishable'), rateLimit, async 
      JSON.stringify(intent), String(TOKEN_TTL_MIN)]));
 
   meter.record(tenantId, siteId, { cached: false, usage,
-    environment: req.hydra.environment,
-    billable: req.hydra.billable }).catch(() => {});
+    environment: req.algivo.environment,
+    billable: req.algivo.billable }).catch(() => {});
 
-  if (!req.hydra.narration_enabled) delete intent.narration;
+  if (!req.algivo.narration_enabled) delete intent.narration;
 
   res.json({ ok: true, token: newToken, masterIds, intent, relaxed });
 });

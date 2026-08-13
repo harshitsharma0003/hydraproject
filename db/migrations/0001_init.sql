@@ -1,5 +1,5 @@
 -- ============================================================================
--- Hydra gateway - Postgres schema (v1)
+-- Algivo gateway - Postgres schema (v1)
 -- Requires: PostgreSQL 16+, pgvector 0.7+ (halfvec), pg_trgm
 --
 -- Design decisions encoded here:
@@ -20,8 +20,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE SCHEMA IF NOT EXISTS hydra;
-SET search_path = hydra, public;
+CREATE SCHEMA IF NOT EXISTS algivo;
+SET search_path = algivo, public;
 
 
 -- ============================================================================
@@ -92,7 +92,7 @@ CREATE TABLE api_keys (
     tenant_id    uuid     NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     site_id      uuid              REFERENCES sites(id) ON DELETE CASCADE,
     kind         key_kind NOT NULL,
-    prefix       text     NOT NULL,          -- 'hyd_pk_' / 'hyd_sk_', shown in UI
+    prefix       text     NOT NULL,          -- 'alg_pk_' / 'alg_sk_', shown in UI
     key_hash     bytea    NOT NULL,          -- sha256 of the full key
     last_used_at timestamptz,
     revoked_at   timestamptz,
@@ -264,7 +264,7 @@ CREATE TABLE query_cache (
 CREATE INDEX ON query_cache (expires_at);
 
 -- Short-lived token handed to the storefront. The URL carries the token, not
--- session state - that is what keeps the Hydra path and the normal category
+-- session state - that is what keeps the Algivo path and the normal category
 -- path from ever contaminating each other.
 CREATE TABLE query_tokens (
     token       text PRIMARY KEY,             -- short, URL-safe
@@ -290,7 +290,7 @@ CREATE INDEX ON query_tokens (expires_at);
 
 CREATE TABLE visitors (
     tenant_id     uuid        NOT NULL,
-    visitor_id    uuid        NOT NULL,       -- value of the hydra_vid cookie
+    visitor_id    uuid        NOT NULL,       -- value of the algivo_vid cookie
     site_id       uuid        NOT NULL,
     identity_hash bytea,                      -- set on login, enables cross-device
     consent       boolean     NOT NULL DEFAULT false,  -- from merchant's CMP
@@ -326,7 +326,7 @@ CREATE TABLE visitor_events (
 -- writes always land somewhere; monthly partitions are an optimisation on top.
 CREATE TABLE visitor_events_default PARTITION OF visitor_events DEFAULT;
 
--- Monthly partitions. hydra_ensure_partitions() below keeps them rolling.
+-- Monthly partitions. algivo_ensure_partitions() below keeps them rolling.
 CREATE TABLE visitor_events_2026m08 PARTITION OF visitor_events
     FOR VALUES FROM ('2026-08-01') TO ('2026-09-01');
 CREATE TABLE visitor_events_2026m09 PARTITION OF visitor_events
@@ -383,7 +383,7 @@ CREATE TABLE sync_runs (
 );
 CREATE INDEX ON sync_runs (tenant_id, site_id, started_at DESC);
 
--- What Hydra-Health returns to Business Manager so support can diagnose
+-- What Algivo-Health returns to Business Manager so support can diagnose
 -- without instance access.
 CREATE TABLE health_reports (
     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -397,12 +397,12 @@ CREATE TABLE health_reports (
 -- ============================================================================
 -- 8. ROW-LEVEL SECURITY
 -- ============================================================================
--- The application sets: SET LOCAL hydra.tenant_id = '<uuid>';
+-- The application sets: SET LOCAL algivo.tenant_id = '<uuid>';
 -- Isolation is then the database's job, not the query author's.
 
 CREATE OR REPLACE FUNCTION current_tenant() RETURNS uuid
 LANGUAGE sql STABLE AS $$
-    SELECT nullif(current_setting('hydra.tenant_id', true), '')::uuid
+    SELECT nullif(current_setting('algivo.tenant_id', true), '')::uuid
 $$;
 
 DO $$
@@ -431,7 +431,7 @@ END $$;
 -- Fusion is Reciprocal Rank Fusion - no score normalisation needed, which is
 -- what makes it robust when the two rankers disagree.
 
-CREATE OR REPLACE FUNCTION hydra_retrieve(
+CREATE OR REPLACE FUNCTION algivo_retrieve(
     p_tenant_id   uuid,
     p_site_id     uuid,
     p_locale      text,
@@ -531,7 +531,7 @@ $$;
 -- job. Without this, rows fall into visitor_events_default, which still works
 -- but loses the drop-partition fast path for retention.
 
-CREATE OR REPLACE FUNCTION hydra_ensure_partitions(p_months integer DEFAULT 3)
+CREATE OR REPLACE FUNCTION algivo_ensure_partitions(p_months integer DEFAULT 3)
 RETURNS void LANGUAGE plpgsql AS $$
 DECLARE
     i integer;
@@ -558,7 +558,7 @@ END $$;
 -- ============================================================================
 -- 90 days default, tenant-configurable down but not up. Run nightly.
 
-CREATE OR REPLACE FUNCTION hydra_purge(p_days integer DEFAULT 90)
+CREATE OR REPLACE FUNCTION algivo_purge(p_days integer DEFAULT 90)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
     DELETE FROM query_tokens  WHERE expires_at < now();
@@ -569,7 +569,7 @@ END $$;
 
 -- Per-subject erasure. Wired to Shopify's customers/redact webhook and exposed
 -- as a cartridge call on SFCC.
-CREATE OR REPLACE FUNCTION hydra_forget(p_tenant uuid, p_visitor uuid)
+CREATE OR REPLACE FUNCTION algivo_forget(p_tenant uuid, p_visitor uuid)
 RETURNS void LANGUAGE sql AS $$
     DELETE FROM visitor_events   WHERE tenant_id = p_tenant AND visitor_id = p_visitor;
     DELETE FROM visitor_profiles WHERE tenant_id = p_tenant AND visitor_id = p_visitor;

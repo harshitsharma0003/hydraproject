@@ -1,5 +1,5 @@
 -- ============================================================================
--- Hydra 0006 — users, roles, per-site scoping, audit
+-- Algivo 0006 — users, roles, per-site scoping, audit
 --
 -- Three things this has to get right:
 --
@@ -16,7 +16,7 @@
 --    application code, because application code gets bypassed.
 -- ============================================================================
 
-SET search_path = hydra, public;
+SET search_path = algivo, public;
 
 DROP TYPE IF EXISTS console_role CASCADE;
 CREATE TYPE console_role AS ENUM (
@@ -132,7 +132,7 @@ CREATE INDEX ON user_invites (tenant_id, email);
 -- Audit log
 -- ---------------------------------------------------------------------------
 -- Who did what, when, from where. Every state-changing action writes here.
--- Append-only by policy: no UPDATE or DELETE grant is issued to hydra_app.
+-- Append-only by policy: no UPDATE or DELETE grant is issued to algivo_app.
 
 CREATE TABLE audit_log (
     id          bigserial   PRIMARY KEY,

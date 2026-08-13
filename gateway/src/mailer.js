@@ -22,9 +22,9 @@ const rid = require('./requestid');
  */
 
 const PROVIDER = process.env.EMAIL_PROVIDER || 'console';
-const FROM = process.env.EMAIL_FROM || 'Hydra <no-reply@mail.thinkvisor.io>';
+const FROM = process.env.EMAIL_FROM || 'Algivo <no-reply@mail.algivo.thinkvisor.io>';
 const REPLY_TO = process.env.EMAIL_REPLY_TO || null;
-const ORIGIN = process.env.CONSOLE_ORIGIN || 'https://app.thinkvisor.io';
+const ORIGIN = process.env.CONSOLE_ORIGIN || 'https://algivo.thinkvisor.io';
 
 let smtp = null;
 function smtpTransport() {
@@ -112,11 +112,11 @@ function parseFrom(s) {
 const layout = (body) => `<!doctype html>
 <html><body style="margin:0;background:#fbfaf8;font:16px/1.6 -apple-system,Segoe UI,sans-serif;color:#1c1c1a">
 <div style="max-width:520px;margin:40px auto;padding:32px;background:#fff;border:1px solid #e3e1db;border-radius:12px">
-<div style="font-size:18px;font-weight:500;margin-bottom:24px">Hydra</div>
+<div style="font-size:18px;font-weight:500;margin-bottom:24px">Algivo</div>
 ${body}
 <hr style="border:0;border-top:1px solid #e3e1db;margin:28px 0">
 <p style="font-size:12px;color:#6b6a65;margin:0">
-Hydra AI merchandising. If you weren't expecting this, you can ignore it.
+Algivo AI merchandising. If you weren't expecting this, you can ignore it.
 </p></div></body></html>`;
 
 const btn = (url, label) =>
@@ -125,7 +125,7 @@ const btn = (url, label) =>
 
 const TEMPLATES = {
   password_reset: ({ url, name }) => ({
-    subject: 'Reset your Hydra password',
+    subject: 'Reset your Algivo password',
     text: `Hello${name ? ' ' + name : ''},\n\nReset your password:\n${url}\n\n`
         + `This link expires in 30 minutes and works once.\n\n`
         + `If you didn't ask for this, ignore this email — your password is unchanged.`,
@@ -136,7 +136,7 @@ const TEMPLATES = {
   }),
 
   password_changed: ({ name, ip }) => ({
-    subject: 'Your Hydra password was changed',
+    subject: 'Your Algivo password was changed',
     text: `Hello${name ? ' ' + name : ''},\n\nYour password was just changed`
         + `${ip ? ` from ${ip}` : ''}. All other sessions have been signed out.\n\n`
         + `If this wasn't you, contact support immediately.`,
@@ -147,17 +147,17 @@ const TEMPLATES = {
   }),
 
   user_invited: ({ url, inviter, company, role }) => ({
-    subject: `${inviter} invited you to ${company} on Hydra`,
-    text: `${inviter} has invited you to join ${company} on Hydra as ${role}.\n\n`
+    subject: `${inviter} invited you to ${company} on Algivo`,
+    text: `${inviter} has invited you to join ${company} on Algivo as ${role}.\n\n`
         + `${url}\n\nThis invite expires in 7 days.`,
     html: layout(`<p><strong>${inviter}</strong> invited you to join
-      <strong>${company}</strong> on Hydra as <strong>${role}</strong>.</p>
+      <strong>${company}</strong> on Algivo as <strong>${role}</strong>.</p>
       ${btn(url, 'Accept invite')}
       <p style="font-size:14px;color:#6b6a65">Expires in 7 days.</p>`)
   }),
 
   welcome: ({ name, publishableKey }) => ({
-    subject: 'Your Hydra sandbox is ready',
+    subject: 'Your Algivo sandbox is ready',
     text: `Welcome${name ? ' ' + name : ''}.\n\nYour sandbox is live. `
         + `Publishable key: ${publishableKey}\n\n`
         + `Your secret key was shown once at signup and is not repeated here for `
@@ -174,31 +174,31 @@ const TEMPLATES = {
 
   quota_warning: ({ pct, used, cap, company }) => ({
     subject: pct >= 100
-      ? `${company} has reached its Hydra query limit`
-      : `${company} is at ${pct}% of its Hydra query limit`,
+      ? `${company} has reached its Algivo query limit`
+      : `${company} is at ${pct}% of its Algivo query limit`,
     text: `${used.toLocaleString()} of ${cap.toLocaleString()} queries used this month.\n\n`
         + (pct >= 100
             ? `Further queries fall back to your native search — your storefront is `
-            + `not affected. Buy a credit block or upgrade to restore Hydra results.\n\n`
+            + `not affected. Buy a credit block or upgrade to restore Algivo results.\n\n`
             : `No action needed yet.\n\n`)
         + `${ORIGIN}/billing`,
     html: layout(`<p><strong>${used.toLocaleString()}</strong> of
       ${cap.toLocaleString()} queries used this month.</p>
       <p>${pct >= 100
         ? 'Further queries fall back to your native search, so your storefront is '
-        + 'not affected. Buy a credit block or upgrade to restore Hydra results.'
+        + 'not affected. Buy a credit block or upgrade to restore Algivo results.'
         : 'No action needed yet.'}</p>${btn(ORIGIN + '/billing', 'View billing')}`)
   }),
 
   sync_failed: ({ site, error }) => ({
-    subject: `Hydra catalog sync failed for ${site}`,
+    subject: `Algivo catalog sync failed for ${site}`,
     text: `The catalog sync for ${site} failed:\n\n${error}\n\n`
-        + `Your storefront is unaffected — Hydra continues serving the last `
+        + `Your storefront is unaffected — Algivo continues serving the last `
         + `successful catalog.\n\n${ORIGIN}/syncs`,
     html: layout(`<p>The catalog sync for <strong>${site}</strong> failed.</p>
       <p><code style="background:#fcebeb;padding:8px;border-radius:6px;display:block">
       ${error}</code></p>
-      <p>Your storefront is unaffected — Hydra keeps serving the last successful
+      <p>Your storefront is unaffected — Algivo keeps serving the last successful
       catalog.</p>${btn(ORIGIN + '/syncs', 'View syncs')}`)
   })
 };

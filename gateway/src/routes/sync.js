@@ -15,7 +15,7 @@ const router = express.Router();
  * changes never touch the vector.
  */
 router.post('/sync', versionGate, requireKey('secret'), async (req, res) => {
-  const { tenant_id: tenantId, site_id: siteId } = req.hydra;
+  const { tenant_id: tenantId, site_id: siteId } = req.algivo;
   const { mode, rows = [], ids = [], final } = req.body || {};
 
   if (mode === 'purge') {

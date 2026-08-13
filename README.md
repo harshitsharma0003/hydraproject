@@ -1,4 +1,4 @@
-# Hydra Platform (internal)
+# Algivo Platform (internal)
 
 The backend, database and merchant console. This package is **not** shipped to
 customers.
@@ -51,7 +51,7 @@ POST /v1/query
 ```
 
 The gateway returns **IDs, never products and never prices**. The storefront
-hydrates them in the shopper's own session, so price book, customer group and
+algivotes them in the shopper's own session, so price book, customer group and
 active promotions all resolve correctly.
 
 ---
@@ -89,9 +89,9 @@ active promotions all resolve correctly.
 ## Before production
 
 - [ ] Run the migration against a scratch database and confirm the generated
-      `tsvector` column and `hydra_retrieve` compile
+      `tsvector` column and `algivo_retrieve` compile
 - [ ] Replace the placeholder rates in `meter.js` with your actual contract rates
-- [ ] Move boosts in `hydra_retrieve` to a materialised lookup once rule volume
+- [ ] Move boosts in `algivo_retrieve` to a materialised lookup once rule volume
       is real — the correlated subquery is correct but not fast
-- [ ] Connect as `hydra_app`, never as the table owner, or RLS is bypassed
+- [ ] Connect as `algivo_app`, never as the table owner, or RLS is bypassed
 - [ ] Load-test with the HNSW index warm and cold; the difference is 40×

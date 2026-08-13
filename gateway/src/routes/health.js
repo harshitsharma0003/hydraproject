@@ -7,11 +7,11 @@ const { requireKey } = require('../auth');
 const router = express.Router();
 
 /**
- * Authenticated health probe. Called by Hydra-Health in Business Manager so
+ * Authenticated health probe. Called by Algivo-Health in Business Manager so
  * support can diagnose without instance access.
  */
 router.post('/health', requireKey('secret'), async (req, res) => {
-  const { tenant_id: tenantId, site_id: siteId } = req.hydra;
+  const { tenant_id: tenantId, site_id: siteId } = req.algivo;
 
   const [{ rows: counts }, { rows: syncs }, { rows: tax }] = await Promise.all([
     pool.query(`SELECT count(*) FILTER (WHERE embedding IS NOT NULL) AS embedded,
@@ -31,11 +31,11 @@ router.post('/health', requireKey('secret'), async (req, res) => {
     ok: true,
     gatewayVersion: '1.0.0',
     api: 'v1',
-    tier: req.hydra.tier,
-    environment: req.hydra.environment,
-    billable: req.hydra.billable,
-    licenseStatus: req.hydra.status,
-    narrationEnabled: req.hydra.narration_enabled,
+    tier: req.algivo.tier,
+    environment: req.algivo.environment,
+    billable: req.algivo.billable,
+    licenseStatus: req.algivo.status,
+    narrationEnabled: req.algivo.narration_enabled,
     catalog: {
       total: Number(counts[0]?.total || 0),
       embedded: Number(counts[0]?.embedded || 0)

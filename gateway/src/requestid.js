@@ -8,7 +8,7 @@ const { AsyncLocalStorage } = require('async_hooks');
  *
  * Every response and every log line carries the same id, so a customer saying
  * "it broke at 3pm" becomes a single grep instead of an investigation. The id
- * also travels to the storefront, which surfaces it in Hydra-Health — support
+ * also travels to the storefront, which surfaces it in Algivo-Health — support
  * conversations start with "quote me the request id".
  *
  * AsyncLocalStorage means log() picks up the id without threading it through
@@ -35,8 +35,8 @@ function middleware(req, res, next) {
       path: req.path,
       status: res.statusCode,
       ms: Date.now() - started,
-      tenant: req.hydra?.tenant_id || req.user?.tenant_id || null,
-      env: req.hydra?.environment || null
+      tenant: req.algivo?.tenant_id || req.user?.tenant_id || null,
+      env: req.algivo?.environment || null
     });
   });
 

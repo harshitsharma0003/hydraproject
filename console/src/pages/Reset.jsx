@@ -38,7 +38,7 @@ export default function Reset() {
     if (password !== confirm) return setError('Those do not match.');
     const r = await api.resetPassword(token, password);
     if (!r?.ok) return setError(r?.message || 'That did not work.');
-    localStorage.setItem('hydra_token', r.token);
+    localStorage.setItem('algivo_token', r.token);
     nav('/');
   }
 

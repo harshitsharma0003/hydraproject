@@ -1,6 +1,6 @@
 const BASE = import.meta.env.VITE_GATEWAY_URL || '';
 
-function token() { return localStorage.getItem('hydra_token'); }
+function token() { return localStorage.getItem('algivo_token'); }
 
 async function call(path, options = {}) {
   const res = await fetch(BASE + path, {
@@ -13,7 +13,7 @@ async function call(path, options = {}) {
   });
   const requestId = res.headers.get('X-Request-Id');
   if (res.status === 401) {
-    localStorage.removeItem('hydra_token');
+    localStorage.removeItem('algivo_token');
     window.location.href = '/login';
     return null;
   }

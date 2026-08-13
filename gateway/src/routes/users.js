@@ -75,7 +75,7 @@ router.post('/users/invite', rbac.require('users:write'), async (req, res) => {
   const mail = await mailer.send('user_invited', email, {
     url: `${process.env.CONSOLE_ORIGIN}/accept?token=${token}`,
     inviter: req.user.name || req.user.email,
-    company: t?.company || 'their Hydra account',
+    company: t?.company || 'their Algivo account',
     role
   }, { tenantId: req.user.tenant_id });
 

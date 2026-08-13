@@ -24,7 +24,7 @@ export default function Signup() {
       return setError(r?.error === 'email_taken'
         ? 'That email already has an account.' : 'Could not create the account.');
     }
-    localStorage.setItem('hydra_token', r.token);
+    localStorage.setItem('algivo_token', r.token);
     setKeys(r.keys);
   }
 

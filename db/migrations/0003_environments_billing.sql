@@ -1,5 +1,5 @@
 -- ============================================================================
--- Hydra 0003 — environments, non-billable quotas, credit ledger
+-- Algivo 0003 — environments, non-billable quotas, credit ledger
 --
 -- Every merchant needs at least three key pairs: sandbox (developer machines),
 -- UAT (their staging instance), production. Before this migration all three
@@ -16,7 +16,7 @@
 --     money even when the queries do not
 -- ============================================================================
 
-SET search_path = hydra, public;
+SET search_path = algivo, public;
 
 CREATE TYPE site_environment AS ENUM ('sandbox', 'uat', 'production');
 

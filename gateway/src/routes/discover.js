@@ -16,7 +16,7 @@ const router = express.Router();
  * has a manual override on the storefront side.
  */
 router.post('/discover', versionGate, requireKey('secret'), async (req, res) => {
-  const { tenant_id: tenantId, site_id: siteId } = req.hydra;
+  const { tenant_id: tenantId, site_id: siteId } = req.algivo;
   const p = req.body || {};
 
   await pool.query(

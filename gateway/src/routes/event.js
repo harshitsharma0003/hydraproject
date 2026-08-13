@@ -12,7 +12,7 @@ const router = express.Router();
  * re-instrumentation project.
  */
 router.post('/event', versionGate, requireKey(), async (req, res) => {
-  const { tenant_id: tenantId, site_id: siteId } = req.hydra;
+  const { tenant_id: tenantId, site_id: siteId } = req.algivo;
   const { token, kind, masterId, payload, visitorId, orderValue, currency } = req.body || {};
 
   const allowed = ['query', 'chip', 'impression', 'click', 'add_to_cart', 'order'];
@@ -20,7 +20,7 @@ router.post('/event', versionGate, requireKey(), async (req, res) => {
   // Erasure requests arrive here from Shopify's compliance webhooks.
   if (kind === 'redact' && visitorId) {
     await withTenant(tenantId, (c) =>
-      c.query('SELECT hydra_forget($1,$2)', [tenantId, visitorId]));
+      c.query('SELECT algivo_forget($1,$2)', [tenantId, visitorId]));
     return res.json({ ok: true, redacted: true });
   }
 

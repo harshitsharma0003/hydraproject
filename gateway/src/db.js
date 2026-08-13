@@ -10,7 +10,7 @@ const pool = new Pool({
 });
 
 /**
- * Every tenant-scoped query runs inside a transaction with hydra.tenant_id set.
+ * Every tenant-scoped query runs inside a transaction with algivo.tenant_id set.
  * Row-level security then enforces isolation in the database rather than
  * relying on every query author remembering a WHERE clause.
  */
@@ -18,7 +18,7 @@ async function withTenant(tenantId, fn) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('SELECT set_config($1, $2, true)', ['hydra.tenant_id', tenantId]);
+    await client.query('SELECT set_config($1, $2, true)', ['algivo.tenant_id', tenantId]);
     const result = await fn(client);
     await client.query('COMMIT');
     return result;

@@ -13,7 +13,7 @@ export default function Login() {
     setError('');
     const res = await api.login(email, password);
     if (res?.ok) {
-      localStorage.setItem('hydra_token', res.token);
+      localStorage.setItem('algivo_token', res.token);
       nav('/');
     } else {
       setError('Those credentials did not work.');
@@ -23,7 +23,7 @@ export default function Login() {
   return (
     <div className="login">
       <form onSubmit={submit}>
-        <h1>Hydra</h1>
+        <h1>Algivo</h1>
         <label>Email
           <input type="email" value={email} required
                  onChange={(e) => setEmail(e.target.value)} />

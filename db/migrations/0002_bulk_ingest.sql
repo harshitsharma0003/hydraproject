@@ -1,5 +1,5 @@
 -- ============================================================================
--- Hydra 0002 — bulk ingest, async embedding, and queued fixes
+-- Algivo 0002 — bulk ingest, async embedding, and queued fixes
 --
 -- Replaces synchronous embed-inside-the-request with a staging table plus a
 -- background worker. The old path held an HTTP connection open for 5-10s per
@@ -13,7 +13,7 @@
 -- Every stage is resumable and idempotent.
 -- ============================================================================
 
-SET search_path = hydra, public;
+SET search_path = algivo, public;
 
 
 -- ---------------------------------------------------------------------------
@@ -210,7 +210,7 @@ BEGIN
        AND s.master_id = p.master_id AND s.locale = p.locale
      WHERE s.job_id = p_job_id
        AND (p.embedding IS NULL
-            OR p.embed_model IS DISTINCT FROM current_setting('hydra.embed_model', true))
+            OR p.embed_model IS DISTINCT FROM current_setting('algivo.embed_model', true))
     ON CONFLICT (tenant_id, site_id, master_id, locale) DO UPDATE
         SET text_to_embed = EXCLUDED.text_to_embed,
             attempts = 0, claimed_at = NULL, error = NULL;
@@ -303,7 +303,7 @@ ALTER TABLE sites ADD COLUMN sftp_enabled boolean NOT NULL DEFAULT false;
 -- 7. RETENTION FOR THE NEW TABLES
 -- ---------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION hydra_purge(p_days integer DEFAULT 90)
+CREATE OR REPLACE FUNCTION algivo_purge(p_days integer DEFAULT 90)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
     DELETE FROM query_tokens   WHERE expires_at < now();

@@ -14,7 +14,7 @@ const sha256 = (s) => crypto.createHash('sha256').update(s).digest();
  */
 function requireKey(kind) {
   return async function (req, res, next) {
-    const raw = req.get('X-Hydra-Key');
+    const raw = req.get('X-Algivo-Key');
     if (!raw) return res.status(401).json({ ok: false, error: 'missing_key' });
 
     const { rows } = await pool.query(
@@ -56,7 +56,7 @@ function requireKey(kind) {
       }
     }
 
-    req.hydra = key;
+    req.algivo = key;
     pool.query('UPDATE api_keys SET last_used_at = now() WHERE id = $1', [key.id])
       .catch(() => {});
     next();
@@ -69,17 +69,17 @@ function requireKey(kind) {
  * deprecation warnings before anything hard-fails.
  */
 function versionGate(req, res, next) {
-  const v = req.get('X-Hydra-Version') || '0.0.0';
+  const v = req.get('X-Algivo-Version') || '0.0.0';
   const [major] = v.split('.').map(Number);
   if (major < 1) {
     return res.status(426).json({ ok: false, error: 'cartridge_too_old', minimum: '1.0.0' });
   }
-  if (v === '1.0.0') res.set('X-Hydra-Deprecation', 'none');
+  if (v === '1.0.0') res.set('X-Algivo-Deprecation', 'none');
   next();
 }
 
 function issueKey(kind) {
-  const prefix = kind === 'secret' ? 'hyd_sk_' : 'hyd_pk_';
+  const prefix = kind === 'secret' ? 'alg_sk_' : 'alg_pk_';
   const body = crypto.randomBytes(24).toString('base64url');
   const full = prefix + body;
   return { full, prefix, hash: sha256(full) };

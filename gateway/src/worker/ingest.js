@@ -31,7 +31,7 @@ const copyFrom = require('pg-copy-streams').from;
 const { pool, withTenant } = require('../db');
 const mailer = require('../mailer');
 
-const SFTP_ROOT = process.env.SFTP_ROOT || '/srv/hydra/sftp';
+const SFTP_ROOT = process.env.SFTP_ROOT || '/srv/algivo/sftp';
 const POLL_MS = parseInt(process.env.INGEST_POLL_MS || '15000', 10);
 const WORKER_ID = `${require('os').hostname()}-ingest-${process.pid}`;
 
@@ -132,7 +132,7 @@ async function processJob({ sftpUser, jobId, dir }) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query('SELECT set_config($1,$2,true)', ['hydra.tenant_id', job.tenant_id]);
+    await client.query('SELECT set_config($1,$2,true)', ['algivo.tenant_id', job.tenant_id]);
 
     let total = 0;
     for (const c of manifest.chunks) {
@@ -167,7 +167,7 @@ async function processJob({ sftpUser, jobId, dir }) {
         WHERE id=$1`, [jobId, total]);
 
     await client.query('SELECT set_config($1,$2,true)',
-      ['hydra.embed_model', process.env.EMBEDDING_MODEL || 'voyage-3']);
+      ['algivo.embed_model', process.env.EMBEDDING_MODEL || 'voyage-3']);
     const { rows: [res] } = await client.query('SELECT * FROM ingest_promote($1)', [jobId]);
 
     await client.query(

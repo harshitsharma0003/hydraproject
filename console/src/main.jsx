@@ -21,7 +21,7 @@ import { ToastProvider } from './Toast';
 import './styles.css';
 
 const Private = ({ children }) =>
-  localStorage.getItem('hydra_token') ? children : <Navigate to="/login" replace />;
+  localStorage.getItem('algivo_token') ? children : <Navigate to="/login" replace />;
 
 createRoot(document.getElementById('root')).render(
   <BrowserRouter>

@@ -13,7 +13,7 @@ export default function Landing() {
   return (
     <div className="public">
       <header>
-        <span className="brand">Hydra</span>
+        <span className="brand">Algivo</span>
         <nav>
           <a href="#pricing">Pricing</a>
           <Link to="/login">Sign in</Link>
@@ -22,7 +22,7 @@ export default function Landing() {
       </header>
 
       <section className="hero">
-        <h1>Your shoppers describe what they want. Hydra builds the page.</h1>
+        <h1>Your shoppers describe what they want. Algivo builds the page.</h1>
         <p>
           Natural-language merchandising for Salesforce B2C Commerce and Shopify.
           Results render through your own PLP — your templates, your prices, your
@@ -60,7 +60,7 @@ export default function Landing() {
       </section>
 
       <footer>
-        <span>© 2026 Hydra</span>
+        <span>© 2026 Algivo</span>
         <a href="mailto:sales@thinkvisor.io">sales@thinkvisor.io</a>
       </footer>
     </div>

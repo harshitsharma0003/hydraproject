@@ -1,5 +1,5 @@
 -- ============================================================================
--- Hydra 0005 — customer portal and self-serve billing
+-- Algivo 0005 — customer portal and self-serve billing
 --
 -- Adds what a merchant needs to sign up, pay, and manage their own account
 -- without you touching psql.
@@ -10,7 +10,7 @@
 -- but it has to be explained in the UI or it reads as a bug.
 -- ============================================================================
 
-SET search_path = hydra, public;
+SET search_path = algivo, public;
 
 -- Enough to identify a key in a list without being able to reconstruct it.
 ALTER TABLE api_keys ADD COLUMN last4 char(4);

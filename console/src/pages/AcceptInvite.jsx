@@ -13,7 +13,7 @@ export default function AcceptInvite() {
     if (form.password.length < 10) return setError('Use at least 10 characters.');
     const r = await api.acceptInvite({ token: params.get('token'), ...form });
     if (!r?.ok) return setError('This invite is invalid or has expired.');
-    localStorage.setItem('hydra_token', r.token);
+    localStorage.setItem('algivo_token', r.token);
     nav('/');
   }
 

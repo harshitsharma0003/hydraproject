@@ -7,7 +7,7 @@ const { pool } = require('../db');
 const { requireKey, versionGate } = require('../auth');
 
 const router = express.Router();
-const SFTP_ROOT = process.env.SFTP_ROOT || '/srv/hydra/sftp';
+const SFTP_ROOT = process.env.SFTP_ROOT || '/srv/algivo/sftp';
 
 /**
  * Bulk ingest control plane. The bytes never come through here - they arrive
@@ -17,7 +17,7 @@ const SFTP_ROOT = process.env.SFTP_ROOT || '/srv/hydra/sftp';
 
 /** Open a job and create its drop directory. */
 router.post('/bulk/begin', versionGate, requireKey('secret'), async (req, res) => {
-  const { tenant_id: tenantId, site_id: siteId } = req.hydra;
+  const { tenant_id: tenantId, site_id: siteId } = req.algivo;
   const { mode = 'full', locale = 'en', expectedChunks = null } = req.body || {};
 
   const { rows: [site] } = await pool.query(
@@ -68,7 +68,7 @@ router.post('/bulk/progress', versionGate, requireKey('secret'), async (req, res
   await pool.query(
     `UPDATE ingest_jobs SET state='uploading', received_chunks=$2, updated_at=now()
       WHERE id=$1 AND tenant_id=$3 AND state IN ('open','uploading')`,
-    [jobId, chunksWritten || 0, req.hydra.tenant_id]);
+    [jobId, chunksWritten || 0, req.algivo.tenant_id]);
   res.json({ ok: true });
 });
 
@@ -77,7 +77,7 @@ router.get('/bulk/status/:jobId', versionGate, requireKey('secret'), async (req,
     `SELECT id, mode, state, expected_chunks, received_chunks, rows_loaded,
             rows_promoted, rows_queued, error, created_at, completed_at
        FROM ingest_jobs WHERE id=$1 AND tenant_id=$2`,
-    [req.params.jobId, req.hydra.tenant_id]);
+    [req.params.jobId, req.algivo.tenant_id]);
   if (!job) return res.status(404).json({ ok: false, error: 'not_found' });
 
   const { rows: [q] } = await pool.query(
@@ -90,7 +90,7 @@ router.post('/bulk/abort', versionGate, requireKey('secret'), async (req, res) =
   await pool.query(
     `UPDATE ingest_jobs SET state='aborted', updated_at=now()
       WHERE id=$1 AND tenant_id=$2 AND state NOT IN ('complete','failed')`,
-    [req.body?.jobId, req.hydra.tenant_id]);
+    [req.body?.jobId, req.algivo.tenant_id]);
   res.json({ ok: true });
 });
 
@@ -100,11 +100,11 @@ router.post('/bulk/abort', versionGate, requireKey('secret'), async (req, res) =
  */
 router.post('/bulk/chunk', versionGate, requireKey('secret'),
   express.raw({ type: '*/*', limit: '64mb' }), async (req, res) => {
-    const jobId = req.get('X-Hydra-Job');
-    const seq = parseInt(req.get('X-Hydra-Seq') || '0', 10);
+    const jobId = req.get('X-Algivo-Job');
+    const seq = parseInt(req.get('X-Algivo-Seq') || '0', 10);
     const { rows: [job] } = await pool.query(
       'SELECT * FROM ingest_jobs WHERE id=$1 AND tenant_id=$2',
-      [jobId, req.hydra.tenant_id]);
+      [jobId, req.algivo.tenant_id]);
     if (!job) return res.status(404).json({ ok: false });
 
     const name = `chunk-${String(seq).padStart(5, '0')}.ndjson.gz`;
@@ -120,7 +120,7 @@ router.post('/bulk/manifest', versionGate, requireKey('secret'), async (req, res
   const { jobId, manifest } = req.body || {};
   const { rows: [job] } = await pool.query(
     'SELECT * FROM ingest_jobs WHERE id=$1 AND tenant_id=$2',
-    [jobId, req.hydra.tenant_id]);
+    [jobId, req.algivo.tenant_id]);
   if (!job) return res.status(404).json({ ok: false });
 
   await fsp.writeFile(

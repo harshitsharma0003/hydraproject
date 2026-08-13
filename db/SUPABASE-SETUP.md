@@ -2,7 +2,7 @@
 
 > **Self-hosting on your own VM is now the primary path** — run
 > `setup/install.sh`, which installs and tunes PostgreSQL 16 + pgvector, creates
-> the `hydra_app` role, and applies migrations. The document below covers
+> the `algivo_app` role, and applies migrations. The document below covers
 > managed Postgres (Supabase or equivalent) if you separate the database from
 > the app tier later.
 
@@ -59,7 +59,7 @@ psql "$DATABASE_URL" -f db/migrations/0001_init.sql
 
 Use the **session pooler** (port 5432), not the transaction pooler (6543).
 
-`SET LOCAL hydra.tenant_id` — which is how row-level security isolates tenants —
+`SET LOCAL algivo.tenant_id` — which is how row-level security isolates tenants —
 requires session-level state that the transaction pooler does not preserve.
 Getting this wrong causes intermittent, extremely confusing cross-tenant
 behaviour under load.
@@ -73,25 +73,25 @@ postgresql://postgres.PROJECT:PASSWORD@aws-0-REGION.pooler.supabase.com:5432/pos
 ## 5. Row-level security
 
 The migration enables `FORCE ROW LEVEL SECURITY` on every tenant-scoped table.
-The gateway sets `hydra.tenant_id` inside a transaction before touching them.
+The gateway sets `algivo.tenant_id` inside a transaction before touching them.
 
 **Do not connect the gateway as the table owner or as `postgres`.** Owners
 bypass RLS unless forced, and you lose the guarantee that makes the security
 data sheet true. Create a dedicated role:
 
 ```sql
-CREATE ROLE hydra_app LOGIN PASSWORD 'strong-password';
-GRANT USAGE ON SCHEMA hydra TO hydra_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA hydra TO hydra_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA hydra TO hydra_app;
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA hydra TO hydra_app;
+CREATE ROLE algivo_app LOGIN PASSWORD 'strong-password';
+GRANT USAGE ON SCHEMA algivo TO algivo_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA algivo TO algivo_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA algivo TO algivo_app;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA algivo TO algivo_app;
 ```
 
 Verify isolation before you onboard a second tenant:
 
 ```sql
-SET ROLE hydra_app;
-SELECT set_config('hydra.tenant_id', '<tenant-a-uuid>', false);
+SET ROLE algivo_app;
+SELECT set_config('algivo.tenant_id', '<tenant-a-uuid>', false);
 SELECT count(*) FROM products;   -- must show only tenant A
 ```
 
@@ -114,7 +114,7 @@ CREATE TABLE products_t_acme PARTITION OF products FOR VALUES IN ('<uuid>');
 Enable `pg_cron` and schedule retention nightly:
 
 ```sql
-SELECT cron.schedule('hydra-purge', '0 3 * * *', $$SELECT hydra.hydra_purge(90)$$);
+SELECT cron.schedule('algivo-purge', '0 3 * * *', $$SELECT algivo.algivo_purge(90)$$);
 ```
 
 ---

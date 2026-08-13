@@ -36,7 +36,7 @@ function pickGenderOnly(attrs) {
 
 async function runRetrieval(client, tenantId, siteId, locale, f, limit) {
   const { rows } = await client.query(
-    `SELECT * FROM hydra_retrieve($1,$2,$3,$4::halfvec,$5,$6::jsonb,$7,$8,$9,$10)`,
+    `SELECT * FROM algivo_retrieve($1,$2,$3,$4::halfvec,$5,$6::jsonb,$7,$8,$9,$10)`,
     [tenantId, siteId, locale, f.vector, f.queryText,
      JSON.stringify(f.attrs || {}),
      f.categories && f.categories.length ? f.categories : null,

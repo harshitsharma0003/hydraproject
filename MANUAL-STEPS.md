@@ -1,4 +1,4 @@
-# Hydra Platform — Setup Steps & Known Caveats
+# Algivo Platform — Setup Steps & Known Caveats
 
 Internal. Not shipped to customers.
 
@@ -21,10 +21,10 @@ See `db/SUPABASE-SETUP.md` for the full walkthrough. The two things that will
 silently break you:
 
 - **Use the session pooler (port 5432), not the transaction pooler (6543).**
-  `SET LOCAL hydra.tenant_id` needs session state the transaction pooler does
+  `SET LOCAL algivo.tenant_id` needs session state the transaction pooler does
   not preserve. Getting this wrong causes intermittent cross-tenant reads under
   load — the worst possible failure mode.
-- **Connect as `hydra_app`, never as the table owner or `postgres`.** Owners
+- **Connect as `algivo_app`, never as the table owner or `postgres`.** Owners
   bypass RLS, which invalidates the isolation claim in the customer security
   data sheet.
 
@@ -44,9 +44,9 @@ SELECT extversion FROM pg_extension WHERE extname = 'vector';
 ## A2. Verify tenant isolation before onboarding a second customer
 
 ```sql
-SET ROLE hydra_app;
-SELECT set_config('hydra.tenant_id', '<tenant-a-uuid>', false);
-SELECT count(*) FROM hydra.products;   -- must show ONLY tenant A
+SET ROLE algivo_app;
+SELECT set_config('algivo.tenant_id', '<tenant-a-uuid>', false);
+SELECT count(*) FROM algivo.products;   -- must show ONLY tenant A
 ```
 
 If this returns rows from other tenants, stop. Do not onboard anyone.
@@ -54,8 +54,8 @@ If this returns rows from other tenants, stop. Do not onboard anyone.
 ## A3. Scheduled jobs
 
 ```sql
-SELECT cron.schedule('hydra-purge',      '0 3 * * *', $$SELECT hydra.hydra_purge(90)$$);
-SELECT cron.schedule('hydra-partitions', '0 4 1 * *', $$SELECT hydra.hydra_ensure_partitions(3)$$);
+SELECT cron.schedule('algivo-purge',      '0 3 * * *', $$SELECT algivo.algivo_purge(90)$$);
+SELECT cron.schedule('algivo-partitions', '0 4 1 * *', $$SELECT algivo.algivo_ensure_partitions(3)$$);
 ```
 
 The partition job matters: without it, events fall into
@@ -65,12 +65,12 @@ path for retention.
 ## A4. Environment
 
 Fill `.env` from `.env.example`. `BOOTSTRAP_SECRET` must match the Shopify app's
-`HYDRA_BOOTSTRAP_SECRET` or OAuth installs cannot provision.
+`ALGIVO_BOOTSTRAP_SECRET` or OAuth installs cannot provision.
 
 ## A5. First console user
 
 ```sql
-INSERT INTO hydra.console_users (tenant_id, email, password_hash, role)
+INSERT INTO algivo.console_users (tenant_id, email, password_hash, role)
 VALUES ('<tenant-uuid>', 'ops@merchant.com', crypt('changeme', gen_salt('bf')), 'owner');
 ```
 
@@ -86,11 +86,11 @@ Checkout Session, or provisioning defaults to `sfcc_sfra` / `starter`.
 ## A7. Per-merchant SFTP account
 
 ```bash
-sudo hydra-sftp-user <username> /path/to/their_key.pub
+sudo algivo-sftp-user <username> /path/to/their_key.pub
 ```
 
 ```sql
-UPDATE hydra.sites SET sftp_username='<username>', sftp_enabled=true
+UPDATE algivo.sites SET sftp_username='<username>', sftp_enabled=true
  WHERE external_site_id='<site>';
 ```
 
@@ -113,12 +113,12 @@ Highest-risk constructs:
 - The generated `search_doc` `tsvector` column — generated columns require a
   provably immutable expression; the `setweight`/`to_tsvector` chain should
   qualify with a literal regconfig, but this was not confirmed.
-- `hydra_retrieve()` — 10 parameters, four CTEs, a `FULL OUTER JOIN`, and
+- `algivo_retrieve()` — 10 parameters, four CTEs, a `FULL OUTER JOIN`, and
   correlated subqueries. Any one could fail to compile.
 - HNSW index creation on a **partitioned parent** table.
 - `halfvec` casts in the function signature and in `toPgVector` output.
 
-## B2. HIGH — `hydra_retrieve` boost subquery
+## B2. HIGH — `algivo_retrieve` boost subquery
 
 The boost multiplier uses `exp(sum(ln(r.multiplier)))` to multiply across
 matching rules. `ln()` of a value ≤ 0 raises an error, so a merchandiser
@@ -168,7 +168,7 @@ the RLS list before production.
 
 `admin.js` authenticates with `crypt($2, u.password_hash)`, which needs
 `pgcrypto` in the search path. The migration creates the extension, but if it
-lands in `public` while queries run in `hydra`, login fails with "function
+lands in `public` while queries run in `algivo`, login fails with "function
 crypt does not exist".
 
 ## B8. MEDIUM — Bulk ingest path is entirely untested
@@ -182,7 +182,7 @@ run.** Specific risks:
   backslash is the obvious first test case.
 - `SFTPClient.putBinary()` behaviour on large gzipped files from an SFCC job
   step was not verified, nor was the SFCC job quota for a long-running export.
-- The chroot ACL setup grants the `hydra` user access via `setfacl`. If the
+- The chroot ACL setup grants the `algivo` user access via `setfacl`. If the
   filesystem is mounted without ACL support, the ingest worker cannot read
   merchant uploads.
 
@@ -270,7 +270,7 @@ assignment means tenant-wide. Owners and admins always see everything.
   by inviting an owner account they control.
 - **Nobody can change or suspend their own role**, which prevents locking
   yourself out and prevents self-escalation in one rule.
-- **The audit log is append-only.** `hydra_app` has no `UPDATE` or `DELETE`
+- **The audit log is append-only.** `algivo_app` has no `UPDATE` or `DELETE`
   grant on it, so a compromised gateway cannot rewrite history.
 
 ## Revocation is immediate
@@ -358,7 +358,7 @@ Inbound ids are honoured, so a cartridge call and the gateway work it triggers
 share one trace. Logs are JSON lines including `requestId`, so:
 
 ```bash
-grep '"requestId":"<id>"' /var/log/hydra/gateway.log | jq
+grep '"requestId":"<id>"' /var/log/algivo/gateway.log | jq
 ```
 
 Ask customers for the reference shown in the UI. It maps to exactly one request.

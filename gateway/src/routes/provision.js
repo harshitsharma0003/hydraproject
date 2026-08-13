@@ -60,7 +60,7 @@ async function provision({ name, platform, externalSiteId, tier = 'starter',
 
 /** Shopify OAuth install. Keys are provisioned automatically - nothing to paste. */
 router.post('/tenants/provision', async (req, res) => {
-  const bootstrap = req.get('X-Hydra-Bootstrap');
+  const bootstrap = req.get('X-Algivo-Bootstrap');
   if (!bootstrap || bootstrap !== process.env.BOOTSTRAP_SECRET) {
     return res.status(401).json({ ok: false, error: 'unauthorised' });
   }
@@ -140,7 +140,7 @@ router.post('/billing/webhook', express.raw({ type: 'application/json' }),
         stripeSubId: s.subscription
       });
       // Delivery of keys and the signed download link happens out of band.
-      console.log('[hydra] provisioned tenant', result.tenantId);
+      console.log('[algivo] provisioned tenant', result.tenantId);
     }
 
     if (event.type === 'customer.subscription.deleted') {

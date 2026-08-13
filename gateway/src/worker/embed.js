@@ -43,7 +43,7 @@ async function tick() {
     await client.query('BEGIN');
     for (let i = 0; i < batch.length; i++) {
       const r = batch[i];
-      await client.query('SELECT set_config($1,$2,true)', ['hydra.tenant_id', r.tenant_id]);
+      await client.query('SELECT set_config($1,$2,true)', ['algivo.tenant_id', r.tenant_id]);
       await client.query(
         `UPDATE products
             SET embedding = $5::halfvec, embed_model = $6, embedded_at = now()

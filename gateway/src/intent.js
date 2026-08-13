@@ -1,5 +1,5 @@
 /**
- * Hydra gateway - intent parsing (v1, apparel)
+ * Algivo gateway - intent parsing (v1, apparel)
  *
  * Turns a shopper's sentence into a structured query constrained to THIS
  * merchant's real attribute taxonomy. Never returns products. Never returns

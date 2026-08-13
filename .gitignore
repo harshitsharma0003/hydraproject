@@ -18,4 +18,4 @@ coverage/
 # GitHub secret scanning would flag the Postmark token and Postmark
 # auto-revokes tokens it is told about.
 setup/secrets.env
-/etc/hydra/
+/etc/algivo/

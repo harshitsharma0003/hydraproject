@@ -1,12 +1,12 @@
 -- ============================================================================
--- Hydra 0007 — password reset and outbound email
+-- Algivo 0007 — password reset and outbound email
 --
 -- Reset tokens get the same treatment as API keys and invites: stored hashed,
 -- single use, short lived. A reset link in an inbox is a credential that can
 -- take over an account, so it is the most sensitive of the three.
 -- ============================================================================
 
-SET search_path = hydra, public;
+SET search_path = algivo, public;
 
 CREATE TABLE password_resets (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),

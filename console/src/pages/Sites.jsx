@@ -38,7 +38,7 @@ export default function Sites() {
               {s.findings.searchContested && (
                 <p className="warn">
                   Another cartridge already extends Search.js. Staying on
-                  route_only until the cartridge path puts Hydra ahead of it.
+                  route_only until the cartridge path puts Algivo ahead of it.
                 </p>
               )}
             </div>

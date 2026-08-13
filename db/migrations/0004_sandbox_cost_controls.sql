@@ -1,5 +1,5 @@
 -- ============================================================================
--- Hydra 0004 — environment-aware cost controls
+-- Algivo 0004 — environment-aware cost controls
 --
 -- Sandbox and UAT run real queries against real models, so without this they
 -- cost the same per query as production while generating no revenue.
@@ -18,10 +18,10 @@
 -- The trade-off: a developer iterating on prompts would see stale results
 -- forever. So the cache is keyed on taxonomy version (already) AND can be
 -- flushed on demand from the console, and any request carrying
--- X-Hydra-No-Cache bypasses it.
+-- X-Algivo-No-Cache bypasses it.
 -- ============================================================================
 
-SET search_path = hydra, public;
+SET search_path = algivo, public;
 
 ALTER TABLE sites
     -- NULL means "use the environment default" from cache_policy() below.
@@ -56,7 +56,7 @@ $$;
 -- purge job does not quietly delete them.
 ALTER TABLE query_cache ALTER COLUMN expires_at DROP NOT NULL;
 
-CREATE OR REPLACE FUNCTION hydra_purge(p_days integer DEFAULT 90)
+CREATE OR REPLACE FUNCTION algivo_purge(p_days integer DEFAULT 90)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
     -- NULL expires_at = permanent sandbox entry, never purged by age.

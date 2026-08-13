@@ -2,12 +2,12 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
 export default function App() {
   const nav = useNavigate();
-  const logout = () => { localStorage.removeItem('hydra_token'); nav('/login'); };
+  const logout = () => { localStorage.removeItem('algivo_token'); nav('/login'); };
 
   return (
     <div className="shell">
       <aside>
-        <div className="brand">Hydra</div>
+        <div className="brand">Algivo</div>
         <nav>
           <NavLink to="/" end>Environments</NavLink>
           <NavLink to="/sites">Sites</NavLink>

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Hydra platform — single-VM installer
+# Algivo platform — single-VM installer
 #
 # Installs and wires: PostgreSQL 16 + pgvector, a chrooted SFTP server, the
 # gateway API, both background workers, the merchant console, and nginx with TLS.
@@ -19,11 +19,11 @@ set -euo pipefail
 DOMAIN=""
 API_DOMAIN=""
 EMAIL=""
-REPO="${HYDRA_REPO:-https://github.com/harshitsharma0003/hydraproject.git}"
-BRANCH="${HYDRA_BRANCH:-main}"
+REPO="${ALGIVO_REPO:-https://github.com/harshitsharma0003/hydraproject.git}"
+BRANCH="${ALGIVO_BRANCH:-main}"
 
 # Secrets are NEVER written into this file or committed. They arrive as flags or
-# environment variables and land only in /opt/hydra/gateway/.env (chmod 600).
+# environment variables and land only in /opt/algivo/gateway/.env (chmod 600).
 EMAIL_PROVIDER="${EMAIL_PROVIDER:-console}"
 EMAIL_FROM_ADDR="${EMAIL_FROM:-}"
 POSTMARK_TOKEN="${POSTMARK_TOKEN:-}"
@@ -31,10 +31,10 @@ RESEND_API_KEY="${RESEND_API_KEY:-}"
 SENDGRID_API_KEY="${SENDGRID_API_KEY:-}"
 ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-}"
 VOYAGE_API_KEY="${VOYAGE_API_KEY:-}"
-DB_NAME="hydra"
-DB_APP_USER="hydra_app"
-SFTP_ROOT="/srv/hydra/sftp"
-APP_ROOT="/opt/hydra"
+DB_NAME="algivo"
+DB_APP_USER="algivo_app"
+SFTP_ROOT="/srv/algivo/sftp"
+APP_ROOT="/opt/algivo"
 NODE_MAJOR=20
 PG_MAJOR=16
 
@@ -124,10 +124,10 @@ log "    pgvector $PGV OK"
 TOTAL_MB=$(( $(grep MemTotal /proc/meminfo | awk '{print $2}') / 1024 ))
 SHARED_MB=$(( TOTAL_MB / 4 ))
 CACHE_MB=$(( TOTAL_MB * 3 / 4 ))
-PGCONF="/etc/postgresql/${PG_MAJOR}/main/conf.d/hydra.conf"
+PGCONF="/etc/postgresql/${PG_MAJOR}/main/conf.d/algivo.conf"
 install -d "$(dirname "$PGCONF")"
 cat > "$PGCONF" <<EOF
-# Tuned by Hydra install.sh for a ${TOTAL_MB}MB host.
+# Tuned by Algivo install.sh for a ${TOTAL_MB}MB host.
 shared_buffers = ${SHARED_MB}MB
 effective_cache_size = ${CACHE_MB}MB
 maintenance_work_mem = 1GB          # HNSW index builds are memory hungry
@@ -167,22 +167,22 @@ node --version
 # ---------------------------------------------------------------------------
 log "4/10  Service accounts and directories"
 # ---------------------------------------------------------------------------
-id -u hydra &>/dev/null || useradd --system --home "$APP_ROOT" --shell /usr/sbin/nologin hydra
+id -u algivo &>/dev/null || useradd --system --home "$APP_ROOT" --shell /usr/sbin/nologin algivo
 getent group sftpusers >/dev/null || groupadd sftpusers
 
-install -d -o hydra -g hydra "$APP_ROOT"
+install -d -o algivo -g algivo "$APP_ROOT"
 # SFTP root must be root-owned and non-writable — OpenSSH refuses to chroot
 # into a directory the user can write to.
 install -d -o root -g root -m 755 "$SFTP_ROOT"
-install -d -o hydra -g hydra /var/log/hydra
+install -d -o algivo -g algivo /var/log/algivo
 
 # ---------------------------------------------------------------------------
 log "5/10  SFTP server (chrooted, key-only, no shell)"
 # ---------------------------------------------------------------------------
-if ! grep -q "BEGIN HYDRA SFTP" /etc/ssh/sshd_config; then
+if ! grep -q "BEGIN ALGIVO SFTP" /etc/ssh/sshd_config; then
 cat >> /etc/ssh/sshd_config <<EOF
 
-# === BEGIN HYDRA SFTP ===
+# === BEGIN ALGIVO SFTP ===
 # Per-merchant catalog drop. Chrooted, SFTP only, no shell, no port forwarding.
 Match Group sftpusers
     ChrootDirectory ${SFTP_ROOT}/%u
@@ -191,20 +191,20 @@ Match Group sftpusers
     X11Forwarding no
     PermitTunnel no
     PasswordAuthentication no
-# === END HYDRA SFTP ===
+# === END ALGIVO SFTP ===
 EOF
 fi
 sshd -t || die "sshd config invalid — not restarting"
 systemctl restart ssh || systemctl restart sshd
 
 # Helper the console and provisioning call to create a merchant SFTP account.
-cat > /usr/local/bin/hydra-sftp-user <<'SCRIPT'
+cat > /usr/local/bin/algivo-sftp-user <<'SCRIPT'
 #!/usr/bin/env bash
-# hydra-sftp-user <username> <public-key-file>
+# algivo-sftp-user <username> <public-key-file>
 # Creates a chrooted, key-only SFTP account for one site.
 set -euo pipefail
 USER_NAME="$1"; KEY_FILE="${2:-}"
-SFTP_ROOT="${SFTP_ROOT:-/srv/hydra/sftp}"
+SFTP_ROOT="${SFTP_ROOT:-/srv/algivo/sftp}"
 
 id -u "$USER_NAME" &>/dev/null || \
   useradd --system --gid sftpusers --home "${SFTP_ROOT}/${USER_NAME}" \
@@ -215,9 +215,9 @@ install -d -o root -g root -m 755 "${SFTP_ROOT}/${USER_NAME}"
 for d in incoming processed failed; do
   install -d -o "$USER_NAME" -g sftpusers -m 770 "${SFTP_ROOT}/${USER_NAME}/${d}"
 done
-# The ingest worker runs as hydra and must read and move what the merchant wrote.
-setfacl -R -m u:hydra:rwx "${SFTP_ROOT}/${USER_NAME}"
-setfacl -R -d -m u:hydra:rwx "${SFTP_ROOT}/${USER_NAME}"
+# The ingest worker runs as algivo and must read and move what the merchant wrote.
+setfacl -R -m u:algivo:rwx "${SFTP_ROOT}/${USER_NAME}"
+setfacl -R -d -m u:algivo:rwx "${SFTP_ROOT}/${USER_NAME}"
 
 if [[ -n "$KEY_FILE" ]]; then
   install -d -o "$USER_NAME" -g sftpusers -m 700 "/home/${USER_NAME}/.ssh"
@@ -227,37 +227,37 @@ if [[ -n "$KEY_FILE" ]]; then
 fi
 echo "sftp account ready: ${USER_NAME}"
 SCRIPT
-chmod +x /usr/local/bin/hydra-sftp-user
+chmod +x /usr/local/bin/algivo-sftp-user
 
 # ---------------------------------------------------------------------------
 log "6/10  Application code"
 # ---------------------------------------------------------------------------
 # Clone (or fast-forward) straight from git. This is what makes redeploys a
-# single command later: sudo hydra-update.
+# single command later: sudo algivo-update.
 if [[ -d "$APP_ROOT/.git" ]]; then
   log "    updating existing checkout"
-  sudo -u hydra git -C "$APP_ROOT" fetch --depth 1 origin "$BRANCH"
-  sudo -u hydra git -C "$APP_ROOT" reset --hard "origin/$BRANCH"
+  sudo -u algivo git -C "$APP_ROOT" fetch --depth 1 origin "$BRANCH"
+  sudo -u algivo git -C "$APP_ROOT" reset --hard "origin/$BRANCH"
 else
   log "    cloning $REPO ($BRANCH)"
   rm -rf "$APP_ROOT"
   git clone --depth 1 --branch "$BRANCH" "$REPO" "$APP_ROOT" \
     || die "clone failed. Private repo? Use a deploy key, or --repo git@github.com:..."
-  chown -R hydra:hydra "$APP_ROOT"
+  chown -R algivo:algivo "$APP_ROOT"
 fi
 git config --global --add safe.directory "$APP_ROOT" || true
 
-sudo -u hydra bash -c "cd $APP_ROOT/gateway && npm install --omit=dev --silent"
-sudo -u hydra bash -c "cd $APP_ROOT/console && npm install --silent && npm run build"
+sudo -u algivo bash -c "cd $APP_ROOT/gateway && npm install --omit=dev --silent"
+sudo -u algivo bash -c "cd $APP_ROOT/console && npm install --silent && npm run build"
 
 # ---------------------------------------------------------------------------
 log "7/10  Environment and migrations"
 # ---------------------------------------------------------------------------
-# Preserved outside the git checkout so `hydra-update` (which hard-resets the
+# Preserved outside the git checkout so `algivo-update` (which hard-resets the
 # working tree) cannot wipe it.
 if [[ -f "$SECRETS_FILE" ]]; then
-  install -d -o hydra -g hydra -m 700 /etc/hydra
-  install -o hydra -g hydra -m 600 "$SECRETS_FILE" /etc/hydra/secrets.env
+  install -d -o algivo -g algivo -m 700 /etc/algivo
+  install -o algivo -g algivo -m 600 "$SECRETS_FILE" /etc/algivo/secrets.env
 fi
 
 ENV_FILE="$APP_ROOT/gateway/.env"
@@ -285,7 +285,7 @@ GATEWAY_ORIGIN=https://${API_DOMAIN:-${DOMAIN:-localhost}}
 # Email. Set EMAIL_PROVIDER to smtp/resend/postmark/sendgrid before going live -
 # password reset and invites do nothing on 'console'.
 EMAIL_PROVIDER=${EMAIL_PROVIDER}
-EMAIL_FROM=${EMAIL_FROM_ADDR:-Hydra <no-reply@mail.${DOMAIN:-localhost}>}
+EMAIL_FROM=${EMAIL_FROM_ADDR:-Algivo <no-reply@mail.${DOMAIN:-localhost}>}
 EMAIL_REPLY_TO=${EMAIL_REPLY_TO:-}
 POSTMARK_TOKEN=${POSTMARK_TOKEN}
 POSTMARK_STREAM=outbound
@@ -307,71 +307,71 @@ TOKEN_TTL_MINUTES=30
 EMBED_BATCH=128
 INGEST_POLL_MS=15000
 EOF
-  chown hydra:hydra "$ENV_FILE"; chmod 600 "$ENV_FILE"
+  chown algivo:algivo "$ENV_FILE"; chmod 600 "$ENV_FILE"
 else
   warn "$ENV_FILE exists, leaving it alone"
 fi
 
 # Migrations run as the OWNER (postgres), so RLS-forced tables can be created;
-# the app then connects as hydra_app and is subject to those policies.
+# the app then connects as algivo_app and is subject to those policies.
 sudo -u postgres bash -c "cd $APP_ROOT && DATABASE_URL='postgresql://postgres@/${DB_NAME}?host=/var/run/postgresql' node gateway/scripts/migrate.js"
 
 # Redeploy helper: pull, install, migrate, restart.
-cat > /usr/local/bin/hydra-update <<'UPD'
+cat > /usr/local/bin/algivo-update <<'UPD'
 #!/usr/bin/env bash
 # Pull the latest code and restart. Safe to run repeatedly.
 set -euo pipefail
-APP_ROOT=/opt/hydra
+APP_ROOT=/opt/algivo
 BRANCH="${1:-main}"
 
 echo "==> fetching"
-sudo -u hydra git -C "$APP_ROOT" fetch --depth 1 origin "$BRANCH"
+sudo -u algivo git -C "$APP_ROOT" fetch --depth 1 origin "$BRANCH"
 BEFORE=$(git -C "$APP_ROOT" rev-parse HEAD)
-sudo -u hydra git -C "$APP_ROOT" reset --hard "origin/$BRANCH"
+sudo -u algivo git -C "$APP_ROOT" reset --hard "origin/$BRANCH"
 AFTER=$(git -C "$APP_ROOT" rev-parse HEAD)
 echo "    $BEFORE -> $AFTER"
 
 # A git hard-reset wipes anything untracked in the checkout, so secrets live in
-# /etc/hydra and are re-applied here rather than stored under /opt/hydra.
-if [[ -f /etc/hydra/secrets.env ]]; then
-  set -a; source /etc/hydra/secrets.env; set +a
+# /etc/algivo and are re-applied here rather than stored under /opt/algivo.
+if [[ -f /etc/algivo/secrets.env ]]; then
+  set -a; source /etc/algivo/secrets.env; set +a
   for k in EMAIL_PROVIDER POSTMARK_TOKEN POSTMARK_STREAM EMAIL_FROM EMAIL_REPLY_TO \
            ANTHROPIC_API_KEY VOYAGE_API_KEY STRIPE_SECRET_KEY STRIPE_WEBHOOK_SECRET; do
     v="${!k:-}"
-    [[ -n "$v" ]] && /usr/local/bin/hydra-set "$k" "$v" >/dev/null
+    [[ -n "$v" ]] && /usr/local/bin/algivo-set "$k" "$v" >/dev/null
   done
-  echo "    re-applied /etc/hydra/secrets.env"
+  echo "    re-applied /etc/algivo/secrets.env"
 fi
 
 echo "==> dependencies"
-sudo -u hydra bash -c "cd $APP_ROOT/gateway && npm install --omit=dev --silent"
-sudo -u hydra bash -c "cd $APP_ROOT/console && npm install --silent && npm run build"
+sudo -u algivo bash -c "cd $APP_ROOT/gateway && npm install --omit=dev --silent"
+sudo -u algivo bash -c "cd $APP_ROOT/console && npm install --silent && npm run build"
 
 echo "==> migrations"
-sudo -u postgres bash -c "cd $APP_ROOT && DATABASE_URL='postgresql://postgres@/hydra?host=/var/run/postgresql' node gateway/scripts/migrate.js"
+sudo -u postgres bash -c "cd $APP_ROOT && DATABASE_URL='postgresql://postgres@/algivo?host=/var/run/postgresql' node gateway/scripts/migrate.js"
 
 echo "==> restart"
-systemctl restart hydra-gateway hydra-ingest hydra-embed
+systemctl restart algivo-gateway algivo-ingest algivo-embed
 sleep 2
-systemctl is-active hydra-gateway hydra-ingest hydra-embed
+systemctl is-active algivo-gateway algivo-ingest algivo-embed
 curl -sf localhost:8080/health && echo && echo "==> ok"
 UPD
-chmod +x /usr/local/bin/hydra-update
+chmod +x /usr/local/bin/algivo-update
 
 sudo -u postgres psql -d "$DB_NAME" -q <<EOF
-GRANT USAGE ON SCHEMA hydra TO ${DB_APP_USER};
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA hydra TO ${DB_APP_USER};
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA hydra TO ${DB_APP_USER};
-GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA hydra TO ${DB_APP_USER};
-ALTER DEFAULT PRIVILEGES IN SCHEMA hydra
+GRANT USAGE ON SCHEMA algivo TO ${DB_APP_USER};
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA algivo TO ${DB_APP_USER};
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA algivo TO ${DB_APP_USER};
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA algivo TO ${DB_APP_USER};
+ALTER DEFAULT PRIVILEGES IN SCHEMA algivo
   GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO ${DB_APP_USER};
-ALTER DEFAULT PRIVILEGES IN SCHEMA hydra
+ALTER DEFAULT PRIVILEGES IN SCHEMA algivo
   GRANT USAGE, SELECT ON SEQUENCES TO ${DB_APP_USER};
-ALTER ROLE ${DB_APP_USER} SET search_path = hydra, public;
+ALTER ROLE ${DB_APP_USER} SET search_path = algivo, public;
 
 -- Audit log is append-only. Revoking UPDATE and DELETE at the grant level means
 -- even a compromised application cannot rewrite history.
-REVOKE UPDATE, DELETE ON hydra.audit_log FROM ${DB_APP_USER};
+REVOKE UPDATE, DELETE ON algivo.audit_log FROM ${DB_APP_USER};
 EOF
 
 # ---------------------------------------------------------------------------
@@ -386,39 +386,39 @@ Requires=postgresql.service
 
 [Service]
 Type=simple
-User=hydra
-Group=hydra
+User=algivo
+Group=algivo
 WorkingDirectory=${APP_ROOT}/gateway
 EnvironmentFile=${APP_ROOT}/gateway/.env
 ExecStart=/usr/bin/node $3
 Restart=always
 RestartSec=5
-StandardOutput=append:/var/log/hydra/$4.log
-StandardError=append:/var/log/hydra/$4.log
+StandardOutput=append:/var/log/algivo/$4.log
+StandardError=append:/var/log/algivo/$4.log
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/var/log/hydra ${SFTP_ROOT}
+ReadWritePaths=/var/log/algivo ${SFTP_ROOT}
 
 [Install]
 WantedBy=multi-user.target
 EOF
 }
 
-write_unit hydra-gateway.service "Hydra gateway API"      "src/server.js"        gateway
-write_unit hydra-ingest.service  "Hydra SFTP ingest worker" "src/worker/ingest.js" ingest
-write_unit hydra-embed.service   "Hydra embedding worker"   "src/worker/embed.js"  embed
+write_unit algivo-gateway.service "Algivo gateway API"      "src/server.js"        gateway
+write_unit algivo-ingest.service  "Algivo SFTP ingest worker" "src/worker/ingest.js" ingest
+write_unit algivo-embed.service   "Algivo embedding worker"   "src/worker/embed.js"  embed
 
 systemctl daemon-reload
-systemctl enable hydra-gateway hydra-ingest hydra-embed
+systemctl enable algivo-gateway algivo-ingest algivo-embed
 
 # Set or change one secret without opening an editor. Values never touch the
-# repo, only /opt/hydra/gateway/.env.
-cat > /usr/local/bin/hydra-set <<'SETTER'
+# repo, only /opt/algivo/gateway/.env.
+cat > /usr/local/bin/algivo-set <<'SETTER'
 #!/usr/bin/env bash
-# hydra-set KEY VALUE   — writes to the gateway .env and restarts services.
+# algivo-set KEY VALUE   — writes to the gateway .env and restarts services.
 set -euo pipefail
-ENV_FILE=/opt/hydra/gateway/.env
+ENV_FILE=/opt/algivo/gateway/.env
 KEY="$1"; shift
 VALUE="$*"
 [[ -f "$ENV_FILE" ]] || { echo "no $ENV_FILE"; exit 1; }
@@ -426,33 +426,33 @@ if grep -q "^${KEY}=" "$ENV_FILE"; then
   # In-place, using a temp file so a crash cannot truncate the env.
   tmp=$(mktemp); grep -v "^${KEY}=" "$ENV_FILE" > "$tmp"
   echo "${KEY}=${VALUE}" >> "$tmp"
-  install -o hydra -g hydra -m 600 "$tmp" "$ENV_FILE"; rm -f "$tmp"
+  install -o algivo -g algivo -m 600 "$tmp" "$ENV_FILE"; rm -f "$tmp"
 else
   echo "${KEY}=${VALUE}" >> "$ENV_FILE"
 fi
 echo "set ${KEY}"
-systemctl restart hydra-gateway hydra-ingest hydra-embed 2>/dev/null || true
+systemctl restart algivo-gateway algivo-ingest algivo-embed 2>/dev/null || true
 SETTER
-chmod 750 /usr/local/bin/hydra-set
+chmod 750 /usr/local/bin/algivo-set
 
 # Send a real message end to end. Deliverability problems are much cheaper to
 # find now than when a customer cannot reset their password.
-cat > /usr/local/bin/hydra-test-email <<'TESTER'
+cat > /usr/local/bin/algivo-test-email <<'TESTER'
 #!/usr/bin/env bash
-# hydra-test-email you@example.com
+# algivo-test-email you@example.com
 set -euo pipefail
-cd /opt/hydra/gateway
-sudo -u hydra env $(grep -v '^#' .env | xargs -d '\n') node -e "
+cd /opt/algivo/gateway
+sudo -u algivo env $(grep -v '^#' .env | xargs -d '\n') node -e "
 const m = require('./src/mailer');
 m.send('password_reset', process.argv[1], { name: 'Test', url: 'https://example.com/reset?token=test' })
   .then(r => { console.log(r.ok ? 'sent via ' + m.PROVIDER : 'FAILED: ' + r.error);
                process.exit(r.ok ? 0 : 1); });
 " "$1"
 TESTER
-chmod 755 /usr/local/bin/hydra-test-email
+chmod 755 /usr/local/bin/algivo-test-email
 
-cat > /etc/logrotate.d/hydra <<EOF
-/var/log/hydra/*.log {
+cat > /etc/logrotate.d/algivo <<EOF
+/var/log/algivo/*.log {
   daily
   rotate 14
   compress
@@ -468,7 +468,7 @@ log "9/10  nginx"
 SERVER_NAME="${DOMAIN:-_}"
 API_SERVER_NAME="${API_DOMAIN:-$SERVER_NAME}"
 
-cat > /etc/nginx/sites-available/hydra <<EOF
+cat > /etc/nginx/sites-available/algivo <<EOF
 # Console and public site. Humans.
 server {
     listen 80;
@@ -490,7 +490,7 @@ EOF
 # cannot touch the endpoint merchants' storefronts depend on, and so the two
 # can be rate-limited and monitored independently.
 if [[ -n "$API_DOMAIN" && "$API_DOMAIN" != "$SERVER_NAME" ]]; then
-cat >> /etc/nginx/sites-available/hydra <<EOF
+cat >> /etc/nginx/sites-available/algivo <<EOF
 
 server {
     listen 80;
@@ -504,7 +504,7 @@ server {
 }
 EOF
 fi
-ln -sf /etc/nginx/sites-available/hydra /etc/nginx/sites-enabled/hydra
+ln -sf /etc/nginx/sites-available/algivo /etc/nginx/sites-enabled/algivo
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl reload nginx
 
@@ -527,14 +527,14 @@ ufw allow 80/tcp  >/dev/null
 ufw allow 443/tcp >/dev/null
 ufw --force enable >/dev/null
 
-cat > /etc/cron.d/hydra <<EOF
-0 3 * * * postgres psql -d ${DB_NAME} -c "SELECT hydra.hydra_purge(90)" >/dev/null 2>&1
-0 4 1 * * postgres psql -d ${DB_NAME} -c "SELECT hydra.hydra_ensure_partitions(3)" >/dev/null 2>&1
+cat > /etc/cron.d/algivo <<EOF
+0 3 * * * postgres psql -d ${DB_NAME} -c "SELECT algivo.algivo_purge(90)" >/dev/null 2>&1
+0 4 1 * * postgres psql -d ${DB_NAME} -c "SELECT algivo.algivo_ensure_partitions(3)" >/dev/null 2>&1
 EOF
 
-CREDS="/root/hydra-credentials.txt"
+CREDS="/root/algivo-credentials.txt"
 cat > "$CREDS" <<EOF
-Hydra platform — generated $(date -Is)
+Algivo platform — generated $(date -Is)
 
 Database
   name     ${DB_NAME}
@@ -546,7 +546,7 @@ Paths
   app      ${APP_ROOT}
   sftp     ${SFTP_ROOT}
   env      ${APP_ROOT}/gateway/.env
-  logs     /var/log/hydra/
+  logs     /var/log/algivo/
 
 JWT_SECRET and BOOTSTRAP_SECRET are in the .env file.
 EOF
@@ -561,41 +561,41 @@ cat <<EOF
  1. $( [[ -n "${ANTHROPIC_API_KEY}" && -n "${VOYAGE_API_KEY}" ]] \
        && echo "API keys are set." \
        || echo "Add the missing API keys:
-      sudo hydra-set ANTHROPIC_API_KEY sk-ant-xxxx
-      sudo hydra-set VOYAGE_API_KEY pa-xxxx" )
+      sudo algivo-set ANTHROPIC_API_KEY sk-ant-xxxx
+      sudo algivo-set VOYAGE_API_KEY pa-xxxx" )
 
  2. Email is set to '${EMAIL_PROVIDER}'.
     $( [[ "$EMAIL_PROVIDER" == "console" ]] \
        && echo "WARNING: nothing is delivered on 'console'. Password reset and" \
        && echo "    invites will silently do nothing. Set a real provider:" \
-       && echo "      sudo hydra-set EMAIL_PROVIDER postmark" \
-       && echo "      sudo hydra-set POSTMARK_TOKEN <token>" \
-       || echo "Verify delivery:  sudo hydra-test-email you@example.com" )
+       && echo "      sudo algivo-set EMAIL_PROVIDER postmark" \
+       && echo "      sudo algivo-set POSTMARK_TOKEN <token>" \
+       || echo "Verify delivery:  sudo algivo-test-email you@example.com" )
 
  3. Start:
-      sudo systemctl start hydra-gateway hydra-ingest hydra-embed
+      sudo systemctl start algivo-gateway algivo-ingest algivo-embed
 
  4. Check:
       curl localhost:8080/health
-      sudo journalctl -u hydra-gateway -f
+      sudo journalctl -u algivo-gateway -f
 
  5. Verify tenant isolation BEFORE onboarding a second customer:
       sudo -u postgres psql -d ${DB_NAME} -c "\\
         SET ROLE ${DB_APP_USER}; \\
-        SELECT set_config('hydra.tenant_id','<tenant-uuid>',false); \\
-        SELECT count(*) FROM hydra.products;"
+        SELECT set_config('algivo.tenant_id','<tenant-uuid>',false); \\
+        SELECT count(*) FROM algivo.products;"
       It must return only that tenant's rows.
 
  6. Create a merchant SFTP account:
-      sudo hydra-sftp-user acme_prod /path/to/their_key.pub
+      sudo algivo-sftp-user acme_prod /path/to/their_key.pub
 
  Redeploy after pushing to git:
-      sudo hydra-update
+      sudo algivo-update
 
  Endpoints:
       console   https://${DOMAIN:-localhost}
       api       https://${API_DOMAIN:-${DOMAIN:-localhost}}
-      sftp      ${DOMAIN:+sftp.thinkvisor.io} (port 22)
+      sftp      ${DOMAIN:+sftp.algivo.thinkvisor.io} (port 22)
 
  Credentials: ${CREDS}
 
