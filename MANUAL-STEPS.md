@@ -103,20 +103,39 @@ Bulk sync returns `sftp_not_provisioned` until both are done.
 **Nothing in this package has been executed.** No database was provisioned, no
 API was called, no query was run. Treat all of Part B as untested.
 
-## B1. CRITICAL — The SQL has never run
+## B1. RESOLVED — the SQL now runs
 
-`db/migrations/0001_init.sql` is syntax-reviewed but **never executed against
-Postgres**. Run it on a scratch database first.
+All seven migrations were executed against PostgreSQL 16.14 with pgvector 0.8.0.
+Result: **36 tables, 4 views, 17 functions, 99 indexes**, applied cleanly and
+idempotently through `gateway/scripts/migrate.js`.
 
-Highest-risk constructs:
+Five defects were found and fixed by running it. Each would have stopped the
+install dead:
 
-- The generated `search_doc` `tsvector` column — generated columns require a
-  provably immutable expression; the `setweight`/`to_tsvector` chain should
-  qualify with a literal regconfig, but this was not confirmed.
-- `algivo_retrieve()` — 10 parameters, four CTEs, a `FULL OUTER JOIN`, and
-  correlated subqueries. Any one could fail to compile.
-- HNSW index creation on a **partitioned parent** table.
-- `halfvec` casts in the function signature and in `toPgVector` output.
+1. **`generation expression is not immutable`** — `to_tsvector('english', …)`
+   resolves to the one-argument form, which is STABLE because it reads
+   `default_text_search_config`. Fixed with an explicit `::regconfig` cast.
+2. **Same error, second cause** — `array_to_string` is STABLE, so including
+   `category_path` in the generated column was rejected regardless of the cast.
+   Removed; categories are matched by array overlap in `algivo_retrieve` and
+   the column held IDs rather than display names.
+3. **`functions in index predicate must be marked IMMUTABLE`** — the partial
+   index on `merch_rules` used `now()`. Expiry is filtered at query time now.
+4. **`unique constraint on partitioned table must include all partitioning
+   columns`** — `visitor_events` had `id` alone as the primary key. Now
+   `(id, occurred_at)`.
+5. **`operator does not exist: console_role = text`** — the original
+   `CHECK (role IN (…))` survived the enum conversion. Dropped first.
+
+Verified working against real data: hybrid retrieval with RRF fusion returning
+ranked results, ban rules excluding products, the `multiplier > 0` constraint
+rejecting zero, the last-owner trigger blocking deletion, `visitor_events`
+partition routing, all helper functions, and **RLS isolation** — a session set
+to a different tenant sees 0 rows where the owning tenant sees 3. The HNSW
+index is used by the planner (`Index Scan using products_default_embedding_idx`).
+
+What still has not been tested: the SFTP ingest path, the embedding worker
+against a live Voyage key, and anything in the storefront packages.
 
 ## B2. HIGH — `algivo_retrieve` boost subquery
 

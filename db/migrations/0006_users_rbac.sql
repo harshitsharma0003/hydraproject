@@ -27,12 +27,21 @@ CREATE TYPE console_role AS ENUM (
     'viewer'          -- read only
 );
 
+-- The original column carried CHECK (role IN ('owner','merchandiser','viewer')).
+-- Changing the column to an enum leaves that constraint behind, where it
+-- becomes console_role = text and has no operator. Drop it first.
+ALTER TABLE console_users DROP CONSTRAINT IF EXISTS console_users_role_check;
+
 ALTER TABLE console_users
     ALTER COLUMN role DROP DEFAULT,
+    -- role::text is required: the column is already an enum in some paths, and
+    -- comparing an enum to a text literal has no operator.
     ALTER COLUMN role TYPE console_role USING (
-        CASE role WHEN 'owner' THEN 'owner'::console_role
-                  WHEN 'merchandiser' THEN 'merchandiser'::console_role
-                  ELSE 'viewer'::console_role END),
+        CASE role::text WHEN 'owner' THEN 'owner'::console_role
+                        WHEN 'admin' THEN 'admin'::console_role
+                        WHEN 'merchandiser' THEN 'merchandiser'::console_role
+                        WHEN 'developer' THEN 'developer'::console_role
+                        ELSE 'viewer'::console_role END),
     ALTER COLUMN role SET DEFAULT 'viewer';
 
 ALTER TABLE console_users

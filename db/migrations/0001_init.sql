@@ -171,12 +171,21 @@ CREATE TABLE products (
     embed_version   text,
     embedded_at     timestamptz,
 
+    -- Two things here are load-bearing, both learned by running this rather
+    -- than reading it:
+    --
+    -- 1. The ::regconfig cast. Without it Postgres resolves to the one-argument
+    --    to_tsvector(text), which is STABLE (it reads default_text_search_config)
+    --    and a generated column rejects anything non-immutable.
+    --
+    -- 2. category_path is NOT included. array_to_string is STABLE, so any
+    --    expression touching it is rejected here. Categories are matched by
+    --    array overlap in algivo_retrieve anyway, and category_path holds IDs
+    --    rather than display names, so the lexical value was minimal.
     search_doc      tsvector GENERATED ALWAYS AS (
-                        setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
-                        setweight(to_tsvector('english', coalesce(brand, '')), 'A') ||
-                        setweight(to_tsvector('english', coalesce(description, '')), 'B') ||
-                        setweight(to_tsvector('english',
-                            coalesce(array_to_string(category_path, ' '), '')), 'C')
+                        setweight(to_tsvector('english'::regconfig, coalesce(title, '')), 'A') ||
+                        setweight(to_tsvector('english'::regconfig, coalesce(brand, '')), 'A') ||
+                        setweight(to_tsvector('english'::regconfig, coalesce(description, '')), 'B')
                     ) STORED,
 
     updated_at      timestamptz NOT NULL DEFAULT now(),
@@ -236,8 +245,9 @@ CREATE TABLE merch_rules (
 
     CHECK (master_id IS NOT NULL OR attr_match IS NOT NULL)
 );
-CREATE INDEX ON merch_rules (tenant_id, site_id, kind)
-    WHERE expires_at IS NULL OR expires_at > now();
+-- No now() in the predicate: index predicates must be immutable, and now() is
+-- STABLE. Expiry is filtered at query time in algivo_retrieve instead.
+CREATE INDEX ON merch_rules (tenant_id, site_id, kind, expires_at);
 
 
 -- ============================================================================
@@ -305,7 +315,9 @@ CREATE TYPE event_kind AS ENUM
     ('query', 'chip', 'impression', 'click', 'add_to_cart', 'order');
 
 CREATE TABLE visitor_events (
-    id          bigserial   PRIMARY KEY,
+    -- A unique constraint on a partitioned table must include every
+    -- partitioning column, so the key is (id, occurred_at) not id alone.
+    id          bigserial,
     tenant_id   uuid        NOT NULL,
     visitor_id  uuid        NOT NULL,
     site_id     uuid        NOT NULL,
@@ -318,7 +330,8 @@ CREATE TABLE visitor_events (
     -- change, not a re-instrumentation project.
     order_value numeric(12,2),
     currency    char(3),
-    occurred_at timestamptz NOT NULL DEFAULT now()
+    occurred_at timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (id, occurred_at)
 ) PARTITION BY RANGE (occurred_at);
 
 -- A range-partitioned table with no partitions rejects every INSERT with
