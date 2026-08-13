@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import Logo from './Logo';
 
 export default function App() {
   const nav = useNavigate();
@@ -7,7 +8,7 @@ export default function App() {
   return (
     <div className="shell">
       <aside>
-        <div className="brand">Algivo</div>
+        <div className="brand"><Logo size={26} /></div>
         <nav>
           <NavLink to="/" end>Environments</NavLink>
           <NavLink to="/sites">Sites</NavLink>

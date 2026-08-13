@@ -175,18 +175,18 @@ export default function Environments() {
             {e.billable && <span className="dot" title="Billed" />}
           </button>
         ))}
-        {canUat && !hasUat && (
-          <button className="tab add" disabled={busy}
-                  onClick={() => addEnvironment('uat')} title="Create a UAT environment">＋ UAT</button>
-        )}
-        {canProduction && (
-          <button className="tab add" disabled={busy}
-                  onClick={() => addEnvironment('production')} title="Create a production environment">＋ Production</button>
-        )}
-        {!paid && (
-          <button className="tab add lock" onClick={() => nav('/billing')}
-                  title="Upgrade to add UAT and production">🔒 Add environments</button>
-        )}
+        {['uat', 'production']
+          .filter((k) => !envs.some((e) => e.environment === k))
+          .map((k) => {
+            const allowed = k === 'uat' ? canUat : canProduction;
+            return (
+              <button key={k} className={`tab ghost ${allowed ? '' : 'locked'}`} disabled={busy}
+                      title={allowed ? `Create ${ENV_LABEL[k]}` : `Upgrade to unlock ${ENV_LABEL[k]}`}
+                      onClick={() => (allowed ? addEnvironment(k) : nav('/billing'))}>
+                {!allowed && '🔒 '}{ENV_LABEL[k]}
+              </button>
+            );
+          })}
       </div>
 
       <p className="muted">{ENV_NOTE[env.environment]}</p>

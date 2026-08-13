@@ -13,7 +13,14 @@ const app = express();
 app.use(helmet());
 // First, so every log line and every response downstream carries the id.
 app.use(rid.middleware);
-app.use(express.json({ limit: '8mb' }));   // sync batches
+// Stripe verifies the webhook signature against the EXACT raw bytes, so JSON
+// parsing must not consume the body first. Every other route gets normal JSON
+// parsing; the webhook route (mounted at /v1/billing/webhook) applies its own
+// express.raw() and reads req.body as a Buffer.
+app.use((req, res, next) => {
+  if (req.originalUrl === '/v1/billing/webhook') return next();
+  express.json({ limit: '8mb' })(req, res, next);   // sync batches
+});
 app.use(cors({
   origin: (origin, cb) => cb(null, true),  // per-key origin lock happens in auth
   credentials: false

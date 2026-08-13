@@ -5,6 +5,7 @@ const inr = (micros) => '₹' + Math.round(micros / 1000000).toLocaleString('en-
 
 export default function Billing() {
   const [data, setData] = useState(null);
+  const [msg, setMsg] = useState('');
 
   useEffect(() => { api.billing().then(setData); }, []);
   if (!data) return <section><h1>Billing</h1><p className="muted">Loading…</p></section>;
@@ -12,18 +13,25 @@ export default function Billing() {
   const current = (data.summary || [])[0];
 
   async function upgrade(tier) {
+    setMsg('');
     const r = await api.checkout(tier);
-    if (r?.url) window.location.assign(r.url);
+    if (r?.url) window.location.assign(r.url);       // Stripe Checkout
+    else setMsg('Payments are not enabled on this instance yet. Once Stripe keys '
+      + 'are configured, this will open secure checkout.');
   }
 
   async function buyCredits() {
+    setMsg('');
     const r = await api.buyCredits(1);
     if (r?.url) window.location.assign(r.url);
+    else setMsg('Payments are not enabled on this instance yet.');
   }
 
   return (
     <section>
       <h1>Billing</h1>
+
+      {msg && <p className="warn">{msg}</p>}
 
       {current && (
         <>

@@ -130,6 +130,16 @@ button.link { background:none; color:var(--accent); padding:0; text-align:left; 
 .tab.add { color:var(--accent); border:1px dashed var(--line); border-bottom:1px dashed var(--line);
       border-radius:8px; margin-left:6px; }
 .tab.add:hover { background:#f6f5fd; }
+.tab.ghost { color:var(--muted); }
+.tab.ghost:hover { color:var(--accent); }
+.tab.ghost.locked { opacity:.85; }
+
+/* brand logo (mark + wordmark), used in console + landing */
+.algivo-logo { display:inline-flex; align-items:center; gap:9px; line-height:1; text-decoration:none; }
+.algivo-logo svg { display:block; flex:none; }
+.algivo-word { font-weight:600; font-size:19px; letter-spacing:-.015em;
+      background:linear-gradient(90deg,#3f3a8c,#6d63d6);
+      -webkit-background-clip:text; background-clip:text; color:transparent; }
 
 /* ================================================================== *
  * Marketing homepage (Landing). Self-contained under .lp so it never

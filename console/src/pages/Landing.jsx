@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import Logo from '../Logo';
 
 /* ------------------------------------------------------------------ *
  * Interactive hero demo. These are illustrative — no backend call —
@@ -111,7 +112,7 @@ export default function Landing() {
   return (
     <div className="lp">
       <header className="lp-head">
-        <span className="lp-brand">Algivo</span>
+        <Logo size={28} />
         <nav>
           <a href="#benefits">Benefits</a>
           <a href="#how">How it works</a>
@@ -275,7 +276,7 @@ export default function Landing() {
       </section>
 
       <footer className="lp-foot">
-        <span className="lp-brand sm">Algivo</span>
+        <Logo size={22} />
         <div className="lp-foot-links">
           <a href="#benefits">Benefits</a>
           <a href="#pricing">Pricing</a>
