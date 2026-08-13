@@ -9,6 +9,7 @@ const { requireKey, versionGate } = require('../auth');
 const { rateLimit } = require('../ratelimit');
 const intentLib = require('../intent');
 const { retrieve } = require('../retrieval');
+const { buildChips } = require('../chips');
 const meter = require('../meter');
 
 const router = express.Router();
@@ -137,6 +138,12 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
   if (!masterIds.length) {
     return res.json({ ok: false, error: 'no_results', intent });
   }
+
+  // Values are counted from the products actually retrieved, so every chip is
+  // guaranteed to return results. Cached intents get fresh chips too, because
+  // the catalog may have moved since the intent was cached.
+  intent.chips = await buildChips({ tenantId, siteId, locale, masterIds, intent })
+    .catch(() => []);
 
   const token = crypto.randomBytes(9).toString('base64url');
   await withTenant(tenantId, (c) => c.query(

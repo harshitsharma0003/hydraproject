@@ -9,6 +9,7 @@ const { requireKey, versionGate } = require('../auth');
 const { rateLimit } = require('../ratelimit');
 const intentLib = require('../intent');
 const { retrieve } = require('../retrieval');
+const { buildChips } = require('../chips');
 const meter = require('../meter');
 
 const router = express.Router();
@@ -40,7 +41,36 @@ router.post('/refine', versionGate, requireKey('publishable'), rateLimit, async 
     if (rows[0]) prior = rows[0].intent;
   }
 
-  const followUp = (chip || q || '').toString().slice(0, 400);
+  // A chip carries a known dimension and value, so it applies as a hard filter
+  // with no model call at all - instant, and free.
+  if (chip && typeof chip === 'object' && chip.dimension && chip.value && prior) {
+    const merged = JSON.parse(JSON.stringify(prior));
+    merged.hardFilters = merged.hardFilters || {};
+    merged.hardFilters[chip.dimension] = [chip.value];
+    merged.chipDimensions = (merged.chipDimensions || [])
+      .filter((d) => d !== chip.dimension);
+
+    const r = await retrieve({ tenantId, siteId, locale: locale || 'en',
+                               intent: merged, queryText: '' });
+    if (!r.masterIds.length) {
+      return res.json({ ok: false, error: 'no_results' });
+    }
+    merged.chips = await buildChips({ tenantId, siteId, locale: locale || 'en',
+      masterIds: r.masterIds, intent: merged }).catch(() => []);
+
+    const t = crypto.randomBytes(9).toString('base64url');
+    await withTenant(tenantId, (c) => c.query(
+      `INSERT INTO query_tokens (token, tenant_id, site_id, locale, master_ids,
+                                 intent, expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6, now() + ($7 || ' minutes')::interval)`,
+      [t, tenantId, siteId, locale || 'en', r.masterIds,
+       JSON.stringify(merged), String(TOKEN_TTL_MIN)]));
+
+    return res.json({ ok: true, token: t, masterIds: r.masterIds,
+                      intent: merged, relaxed: r.relaxed, freeRefinement: true });
+  }
+
+  const followUp = (typeof chip === 'string' ? chip : (q || '')).toString().slice(0, 400);
   if (!followUp) return res.json({ ok: false, error: 'empty_refinement' });
 
   const activeLocale = locale || 'en';
@@ -77,6 +107,9 @@ router.post('/refine', versionGate, requireKey('publishable'), rateLimit, async 
   });
 
   if (!masterIds.length) return res.json({ ok: false, error: 'no_results', intent });
+
+  intent.chips = await buildChips({
+    tenantId, siteId, locale: activeLocale, masterIds, intent }).catch(() => []);
 
   const newToken = crypto.randomBytes(9).toString('base64url');
   await withTenant(tenantId, (c) => c.query(

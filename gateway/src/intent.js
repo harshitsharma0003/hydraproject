@@ -110,6 +110,18 @@ const INTENT_TOOL = {
           'PLP. Choose it for open-ended gift browsing on a tight budget.'
       },
 
+      chipDimensions: {
+        type: 'array',
+        items: { type: 'string' },
+        description:
+          'Attribute names from the taxonomy that would be most useful to refine ' +
+          'on, best first, 1-3 of them. Do NOT supply values - the caller fills ' +
+          'those in from the products actually retrieved, so a chip can never ' +
+          'return an empty grid. Choose dimensions the shopper left open: gender ' +
+          'on an unqualified gift query, occasion on a vague one, colour or ' +
+          'fabric when the category is already narrow.'
+      },
+
       clarify: {
         type: 'object',
         description:
@@ -148,7 +160,7 @@ const INTENT_TOOL = {
       confidence: { type: 'number', description: '0-1 on the overall resolution.' }
     },
     required: ['queryType', 'hardFilters', 'softSignals', 'sizeStrategy',
-               'layout', 'ignored', 'narration', 'confidence']
+               'layout', 'chipDimensions', 'ignored', 'narration', 'confidence']
   }
 };
 
@@ -193,6 +205,18 @@ BUDGET
 Treat a bare number as the session currency. A stated maximum is a hard filter,
 but expect the caller to widen the band before retrieval. Never claim in
 narration that items are under a budget - the storefront confirms final price.
+
+REFINEMENT CHIPS
+Always populate chipDimensions with 1-3 attribute names, best first. These
+become the chip row above the grid.
+
+Pick dimensions the shopper genuinely left open, not ones already resolved by
+hardFilters. If the query already specifies occasion, do not suggest occasion.
+Prefer, in order: an unresolved gender on a gift query, then occasion, then the
+attributes that most divide the likely result set - colour, fabric, fit.
+
+Never supply values. The caller computes them from the products actually
+retrieved, so every chip is guaranteed to return results.
 
 CLARIFYING
 Default to blocking:false. Showing results with refinement chips above the grid
@@ -347,6 +371,12 @@ function validate(intent, profile) {
 
   const validCats = new Set(flattenTree(profile.category_tree || []).map((n) => n.id));
   intent.categories = (intent.categories || []).filter((c) => validCats.has(c));
+
+  // Drop suggested dimensions that are not real attributes, or that the query
+  // already pinned - refining on something already filtered is a dead chip.
+  intent.chipDimensions = (intent.chipDimensions || [])
+    .filter((d) => refs[d] && !clean[d])
+    .slice(0, 3);
 
   if (intent.clarify && !intent.clarify.options?.length) delete intent.clarify;
 
