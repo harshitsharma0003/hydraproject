@@ -13,7 +13,7 @@
  * are swapped one batch at a time.
  */
 
-const { pool } = require('../db');
+const { pool, withTenant } = require('../db');
 const { embed, toPgVector, MODEL } = require('../embeddings');
 
 const BATCH = parseInt(process.env.EMBED_BATCH || '128', 10);
@@ -29,11 +29,19 @@ async function tick() {
   try {
     vectors = await embed(batch.map((r) => r.text_to_embed), 'document');
   } catch (e) {
-    // Leave them claimed; attempts was already incremented, so they retry after
-    // the 10-minute stale window and give up after 5 tries.
-    await pool.query(
-      `UPDATE embed_queue SET error=$2, claimed_at=NULL WHERE id = ANY($1)`,
-      [batch.map((r) => r.id), e.message]);
+    // Release for retry. embed_queue is RLS-scoped and a batch can span
+    // tenants, so group by tenant and update each in its own context - a plain
+    // pool update here has no tenant context and is rejected by the policy.
+    const byTenant = new Map();
+    for (const r of batch) {
+      if (!byTenant.has(r.tenant_id)) byTenant.set(r.tenant_id, []);
+      byTenant.get(r.tenant_id).push(r.id);
+    }
+    for (const [tenantId, ids] of byTenant) {
+      await withTenant(tenantId, (c) => c.query(
+        `UPDATE embed_queue SET error=$2, claimed_at=NULL WHERE id = ANY($1)`,
+        [ids, e.message])).catch(() => {});
+    }
     console.error('[embed] provider failed:', e.message);
     return 0;
   }
@@ -67,13 +75,23 @@ async function tick() {
 
 /** Flip a job to complete once nothing is left queued for it. */
 async function closeFinishedJobs(batch) {
-  const jobIds = [...new Set(batch.map((r) => r.job_id).filter(Boolean))];
-  if (!jobIds.length) return;
-  await pool.query(
-    `UPDATE ingest_jobs j SET state='complete', completed_at=now(), updated_at=now()
-      WHERE j.id = ANY($1) AND j.state='embedding'
-        AND NOT EXISTS (SELECT 1 FROM embed_queue q WHERE q.job_id = j.id)`,
-    [jobIds]);
+  // ingest_jobs is RLS-scoped and a batch can span tenants, so group job ids by
+  // tenant and flip each in its own context. A plain pool update here has no
+  // tenant context and is rejected by the policy - which left SFTP full syncs
+  // stuck at 'embedding' forever instead of reaching 'complete'.
+  const byTenant = new Map();
+  for (const r of batch) {
+    if (!r.job_id) continue;
+    if (!byTenant.has(r.tenant_id)) byTenant.set(r.tenant_id, new Set());
+    byTenant.get(r.tenant_id).add(r.job_id);
+  }
+  for (const [tenantId, ids] of byTenant) {
+    await withTenant(tenantId, (c) => c.query(
+      `UPDATE ingest_jobs j SET state='complete', completed_at=now(), updated_at=now()
+        WHERE j.id = ANY($1) AND j.state='embedding'
+          AND NOT EXISTS (SELECT 1 FROM embed_queue q WHERE q.job_id = j.id)`,
+      [[...ids]]));
+  }
 }
 
 if (require.main === module) {
