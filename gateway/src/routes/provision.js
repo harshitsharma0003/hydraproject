@@ -28,8 +28,11 @@ async function provision({ name, platform, externalSiteId, tier = 'starter',
     // undefined -> NULL into a NOT NULL column and the whole request 500'd (a
     // 502 at the proxy). The `|| 100000` fallback means an unrecognised tier can
     // never reintroduce that crash.
-    const quota = { trial: 1000, starter: 100000, growth: 500000,
-                    enterprise: 5000000 }[tier] || 100000;
+    // Included monthly query quota per plan (Basic/Growth/Enterprise). Overage
+    // is billed per query above this (₹0.50 / ₹0.35 / ₹0.25). Beyond quota the
+    // storefront soft-degrades to native search rather than hard-failing.
+    const quota = { trial: 1000, starter: 50000, growth: 250000,
+                    enterprise: 1000000 }[tier] || 50000;
     const narration = tier === 'growth' || tier === 'enterprise';
     await client.query(
       `INSERT INTO licenses (tenant_id, tier, monthly_query_quota,
@@ -134,7 +137,7 @@ router.post('/billing/webhook', express.raw({ type: 'application/json' }),
       // production keys that a trial deliberately does not get.
       if (s.metadata?.tenantId) {
         const tier = s.metadata.tier || 'starter';
-        const quota = { starter: 40000, growth: 250000, enterprise: 1000000 }[tier];
+        const quota = { starter: 50000, growth: 250000, enterprise: 1000000 }[tier];
         await pool.query(
           `UPDATE licenses SET tier=$2::license_tier, monthly_query_quota=$3,
                   included_queries=$3, narration_enabled=$4, status='active',

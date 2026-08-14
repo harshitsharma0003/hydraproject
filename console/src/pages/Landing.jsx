@@ -75,12 +75,12 @@ const BENEFITS = [
 ];
 
 const PLANS = [
-  { id: 'starter', name: 'Starter', price: '₹18,000', queries: '40,000',
-    features: ['Sandbox + production', 'Merchandiser ban list', 'Email support'] },
-  { id: 'growth', name: 'Growth', price: '₹65,000', queries: '250,000', featured: true,
-    features: ['Sandbox, UAT + production', 'Full console', 'AI narration', 'Shared Slack channel'] },
-  { id: 'enterprise', name: 'Enterprise', price: '₹2,25,000', queries: '1,000,000',
-    features: ['Unlimited non-production', 'SLA + named contact', 'Dedicated index partition'] }
+  { id: 'starter', name: 'Basic', price: '₹50,000', queries: '50,000',
+    features: ['Dedicated VM — up to 2.5L SKUs', 'Sandbox + production', '₹0.50 / extra query', 'Email support'] },
+  { id: 'growth', name: 'Growth', price: '₹1,50,000', queries: '250,000', featured: true,
+    features: ['Dedicated high-performance VM — up to 5L SKUs', 'Sandbox, UAT + production', 'AI narration', '₹0.35 / extra query', 'Developer & integration support'] },
+  { id: 'enterprise', name: 'Enterprise', price: 'Custom', queries: '1,000,000+',
+    features: ['Dedicated + HA infrastructure', 'AI narration + tuned models', '₹0.25 / extra query', 'Dedicated engineer + SLA'] }
 ];
 
 function Icon({ name }) {
@@ -276,7 +276,7 @@ export default function Landing() {
             <div className={`lp-plan ${p.featured ? 'featured' : ''}`} key={p.id}>
               {p.featured && <span className="lp-plan-tag">Most popular</span>}
               <h3>{p.name}</h3>
-              <div className="lp-price">{p.price}<span>/mo</span></div>
+              <div className="lp-price">{p.price}{p.price !== 'Custom' && <span>/mo</span>}</div>
               <p className="lp-sub">{p.queries} production queries included</p>
               <ul>{p.features.map((f) => <li key={f}>{f}</li>)}</ul>
               <button type="button" onClick={() => pickPlan(p.name)}
