@@ -5,7 +5,9 @@
 # Installs and wires: PostgreSQL 16 + pgvector, a chrooted SFTP server, the
 # gateway API, both background workers, the merchant console, and nginx with TLS.
 #
-# Target:  Ubuntu 22.04 or 24.04, x86_64
+# Target:  Ubuntu 22.04, 24.04, or 26.04, x86_64
+#          (26.04 ships sudo-rs as the default `sudo`; the installer swaps it
+#           back to classic sudo automatically — see "Base packages" below.)
 # Sizing:  4 vCPU / 8 GB RAM / 100 GB SSD minimum.
 #          RAM is the real constraint — HNSW indexes must stay resident. Budget
 #          ~500 MB of index per tenant at 50k masters. Once the index spills to
@@ -92,6 +94,18 @@ log "1/10  Base packages"
 # ---------------------------------------------------------------------------
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
+
+# sudo-rs trap (Ubuntu 25.10+/26.04): the Rust reimplementation ships as the
+# default `sudo` and rejects invocations the platform and Google's guest agent
+# rely on — this is what left the box unable to sudo mid-deploy. We are already
+# root here, so restore classic sudo so the machine is sane afterwards. No-op on
+# releases that never shipped sudo-rs.
+if dpkg -l sudo-rs 2>/dev/null | grep -q '^ii'; then
+  warn "sudo-rs detected — restoring classic sudo"
+  apt-get purge -y -qq sudo-rs || true
+  apt-get install -y -qq sudo
+fi
+
 apt-get install -y -qq \
   curl ca-certificates gnupg lsb-release git build-essential \
   nginx ufw openssh-server acl jq unzip pwgen
@@ -601,3 +615,24 @@ cat <<EOF
  Credentials: ${CREDS}
 
 EOF
+
+# ---------------------------------------------------------------------------
+log "10/10  Start & verify"
+# ---------------------------------------------------------------------------
+# Turnkey finish: if the model keys are present there is nothing left to
+# configure, so start everything and prove the gateway is healthy. Without keys,
+# search would return nothing, so we leave the services stopped and the summary
+# above tells the operator exactly what to set.
+if [[ -n "$ANTHROPIC_API_KEY" && -n "$VOYAGE_API_KEY" ]]; then
+  systemctl restart algivo-gateway algivo-ingest algivo-embed algivo-profiles \
+    || warn "a service failed to start — check: journalctl -u algivo-gateway -f"
+  sleep 3
+  if curl -fsS --max-time 5 localhost:8080/health >/dev/null 2>&1; then
+    log "gateway healthy — install complete, nothing else to do."
+  else
+    warn "services started but /health not responding yet; tail: journalctl -u algivo-gateway -f"
+  fi
+else
+  warn "ANTHROPIC_API_KEY / VOYAGE_API_KEY not provided — services left stopped."
+  warn "set them, then start: sudo systemctl start algivo-gateway algivo-ingest algivo-embed algivo-profiles"
+fi
