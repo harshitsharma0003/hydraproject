@@ -10,6 +10,17 @@ const rid = require('./requestid');
 
 const app = express();
 
+// Safety net: a single failed request (an unhandled promise rejection, e.g. a
+// rate-limited embedding call in the query path) must never take the whole
+// gateway down. Log and keep serving - the invariant is that a gateway problem
+// degrades one request to native search, it does not become a storefront outage.
+process.on('unhandledRejection', (err) => {
+  rid.error('unhandledRejection', { err: err && err.message, stack: err && err.stack });
+});
+process.on('uncaughtException', (err) => {
+  rid.error('uncaughtException', { err: err && err.message, stack: err && err.stack });
+});
+
 app.use(helmet());
 // First, so every log line and every response downstream carries the id.
 app.use(rid.middleware);

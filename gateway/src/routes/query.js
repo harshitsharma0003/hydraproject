@@ -145,10 +145,17 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
       return res.json({ ok: false, error: 'intent_failed' });
     }
 
-    const r = await retrieve({ tenantId, siteId, locale, intent, queryText: q,
-      candidateLimit: policy.candidate_limit,
-      // Never personalise a gift query - they are not shopping for themselves.
-      styleVector: intent.queryType === 'gift' ? null : styleVector });
+    let r;
+    try {
+      r = await retrieve({ tenantId, siteId, locale, intent, queryText: q,
+        candidateLimit: policy.candidate_limit,
+        // Never personalise a gift query - they are not shopping for themselves.
+        styleVector: intent.queryType === 'gift' ? null : styleVector });
+    } catch (e) {
+      // Retrieval can fail on the query-embedding call (e.g. the provider rate-
+      // limiting us). Degrade to native search - never let it crash the gateway.
+      return res.json({ ok: false, error: 'degraded' });
+    }
     masterIds = r.masterIds;
     relaxed = r.relaxed;
 
