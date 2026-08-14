@@ -1,7 +1,7 @@
 'use strict';
 
 const jwt = require('jsonwebtoken');
-const { pool } = require('./db');
+const { pool, withTenant } = require('./db');
 
 /**
  * Permission matrix.
@@ -122,14 +122,19 @@ async function requireSite(req, res, next) {
  */
 function audit(req, action, extra = {}) {
   const u = req.user || {};
-  pool.query(
+  const tenantId = u.tenant_id || extra.tenantId;
+  // audit_log is RLS-scoped (FORCE ROW LEVEL SECURITY, tenant_isolation). A
+  // plain pool insert has no tenant context, so current_tenant() is null and
+  // the policy rejects the row - silently, because this is fire-and-forget.
+  // That is why the console Audit page was empty. withTenant sets the context.
+  withTenant(tenantId, (c) => c.query(
     `INSERT INTO audit_log (tenant_id, actor_id, actor_email, action, target_type,
                             target_id, site_id, detail, ip, user_agent)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10)`,
-    [u.tenant_id || extra.tenantId, u.id || null, u.email || extra.email || null,
+    [tenantId, u.id || null, u.email || extra.email || null,
      action, extra.targetType || null, extra.targetId || null,
      extra.siteId || null, JSON.stringify(extra.detail || {}),
-     req.ip || null, (req.get('User-Agent') || '').slice(0, 300)]
+     req.ip || null, (req.get('User-Agent') || '').slice(0, 300)])
   ).catch(() => {});
 }
 

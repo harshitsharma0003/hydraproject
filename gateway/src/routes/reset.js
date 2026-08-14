@@ -2,7 +2,7 @@
 
 const express = require('express');
 const crypto = require('crypto');
-const { pool } = require('../db');
+const { pool, withTenant } = require('../db');
 const rbac = require('../rbac');
 const mailer = require('../mailer');
 const rid = require('../requestid');
@@ -103,11 +103,13 @@ router.post('/auth/reset', async (req, res) => {
     return res.status(500).json({ ok: false, error: 'reset_failed' });
   } finally { client.release(); }
 
-  await pool.query(
+  // audit_log is RLS-scoped; write under the tenant's context or the policy
+  // silently drops it (see rbac.audit).
+  await withTenant(pr.tenant_id, (c) => c.query(
     `INSERT INTO audit_log (tenant_id, actor_id, actor_email, action, ip, user_agent)
      VALUES ($1,$2,$3,'user.password_reset',$4,$5)`,
     [pr.tenant_id, pr.user_id, pr.email, req.ip || null,
-     (req.get('User-Agent') || '').slice(0, 300)]);
+     (req.get('User-Agent') || '').slice(0, 300)]));
 
   // Security notice. If the reset wasn't them, this is how they find out.
   await mailer.send('password_changed', pr.email,
