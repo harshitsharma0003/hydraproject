@@ -96,11 +96,14 @@ router.post('/sync', versionGate, requireKey('secret'), async (req, res) => {
   });
 
   if (final) {
-    await pool.query(
+    // sync_runs is RLS-scoped - a plain pool insert has no tenant context and
+    // is rejected by tenant_isolation, so the sync completes but is never
+    // recorded (console Syncs page stays empty). withTenant.
+    await withTenant(tenantId, (c) => c.query(
       `INSERT INTO sync_runs (tenant_id, site_id, kind, status, rows_seen,
                               rows_embedded, finished_at)
        VALUES ($1,$2,$3,'ok',$4,$5,now())`,
-      [tenantId, siteId, mode || 'full', result.ingested, result.embedded]);
+      [tenantId, siteId, mode || 'full', result.ingested, result.embedded]));
     // Taxonomy or catalog changed - stale cached queries must not survive.
     await withTenant(tenantId, (c) => c.query(
       'DELETE FROM query_cache WHERE tenant_id=$1 AND site_id=$2', [tenantId, siteId]));
