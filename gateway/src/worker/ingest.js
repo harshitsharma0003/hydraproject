@@ -117,17 +117,21 @@ function toCsv(job, r) {
 }
 
 async function processJob({ sftpUser, jobId, dir }) {
+  // ingest_jobs is RLS-scoped and the worker has no tenant context yet (it
+  // found the job on disk, not via the DB). Load it through the SECURITY
+  // DEFINER loader (migration 0011) which bypasses RLS; job.tenant_id then
+  // scopes every write below.
   const { rows: [job] } = await pool.query(
-    'SELECT * FROM ingest_jobs WHERE id = $1', [jobId]);
+    'SELECT * FROM ingest_job_load($1)', [jobId]);
   if (!job) { console.warn('[ingest] unknown job', jobId); return; }
   if (['complete', 'failed', 'aborted'].includes(job.state)) return;
 
   const manifest = JSON.parse(await fsp.readFile(path.join(dir, 'manifest.json'), 'utf8'));
 
-  await pool.query(
+  await withTenant(job.tenant_id, (c) => c.query(
     `UPDATE ingest_jobs SET state='loading', manifest=$2, expected_chunks=$3,
             updated_at=now() WHERE id=$1`,
-    [jobId, manifest, manifest.chunks.length]);
+    [jobId, manifest, manifest.chunks.length]));
 
   const client = await pool.connect();
   try {
@@ -184,17 +188,17 @@ async function processJob({ sftpUser, jobId, dir }) {
     await move(dir, path.join(SFTP_ROOT, sftpUser, 'processed', jobId));
   } catch (e) {
     await client.query('ROLLBACK');
-    await pool.query(
+    await withTenant(job.tenant_id, (c) => c.query(
       `UPDATE ingest_jobs SET state='failed', error=$2, updated_at=now() WHERE id=$1`,
-      [jobId, e.message]);
+      [jobId, e.message]));
     console.error(`[ingest] job ${jobId} FAILED:`, e.message);
 
     // A silent sync failure means stale results with nobody aware. Tell them.
     try {
-      const { rows: [ctx] } = await pool.query(
+      const { rows: [ctx] } = await withTenant(job.tenant_id, (c) => c.query(
         `SELECT t.contact_email, s.external_site_id
            FROM sites s JOIN tenants t ON t.id = s.tenant_id
-          WHERE s.id = $1`, [job.site_id]);
+          WHERE s.id = $1`, [job.site_id]));
       if (ctx?.contact_email) {
         await mailer.send('sync_failed', ctx.contact_email,
           { site: ctx.external_site_id, error: e.message },
