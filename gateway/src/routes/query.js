@@ -11,6 +11,7 @@ const intentLib = require('../intent');
 const { retrieve } = require('../retrieval');
 const { buildChips } = require('../chips');
 const meter = require('../meter');
+const rid = require('../requestid');
 
 const router = express.Router();
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -201,6 +202,20 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
   meter.record(tenantId, siteId, { cached, usage,
     environment: req.algivo.environment,
     billable: req.algivo.billable }).catch(() => {});
+
+  // Log the search itself as a visitor_event. The console Queries page and the
+  // whole attribution chain read visitor_events WHERE kind='query'; nothing
+  // else writes that row (the storefront client only fires click/impression
+  // beacons), so without this the Queries page is permanently empty. RLS-scoped
+  // table -> withTenant. Do NOT silently swallow: log on failure so a broken
+  // insert can never hide the way the meter bug did.
+  withTenant(tenantId, (c) => c.query(
+    `INSERT INTO visitor_events (tenant_id, visitor_id, site_id, kind,
+        query_token, payload)
+     VALUES ($1,$2,$3,'query',$4,$5::jsonb)`,
+    [tenantId, visitorId || '00000000-0000-0000-0000-000000000000', siteId,
+     token, JSON.stringify({ q, relaxed: relaxed || null, cached })]))
+    .catch((e) => rid.error('query.event_failed', { err: e && e.message }));
 
   // Narration is tier-gated: it roughly doubles per-query model cost and is
   // the cleanest lever available.
