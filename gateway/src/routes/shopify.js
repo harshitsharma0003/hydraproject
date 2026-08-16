@@ -184,7 +184,17 @@ router.post('/proxy/query', (req, res) => proxyForward(req, res, '/v1/query'));
 router.post('/proxy/event', (req, res) => proxyForward(req, res, '/v1/event'));
 
 /* ── Embedded admin UI + its API (session-token auth) ─────────────────────── */
-router.get('/app', (_req, res) => {
+router.get('/app', (req, res) => {
+  // Embedded page: relax the global helmet CSP so App Bridge (Shopify CDN) + the
+  // inline script run, and let the Shopify admin iframe embed us.
+  const shop = String(req.query.shop || '').toLowerCase();
+  const frame = isShop(shop) ? `https://${shop} https://admin.shopify.com` : 'https://admin.shopify.com';
+  res.removeHeader('X-Frame-Options');
+  res.set('Content-Security-Policy',
+    `frame-ancestors ${frame}; ` +
+    `script-src 'self' https://cdn.shopify.com 'unsafe-inline'; ` +
+    `style-src 'self' 'unsafe-inline'; img-src 'self' data:; ` +
+    `connect-src 'self' https://cdn.shopify.com https://${shop};`);
   res.set('Content-Type', 'text/html').send(SETTINGS_HTML.replace(/%API_KEY%/g, API_KEY));
 });
 
