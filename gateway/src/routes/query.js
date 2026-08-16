@@ -19,6 +19,47 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const TOKEN_TTL_MIN = parseInt(process.env.TOKEN_TTL_MINUTES || '30', 10);
 const CACHE_TTL_S = parseInt(process.env.QUERY_CACHE_TTL_SECONDS || '3600', 10);
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Storefronts mint their own visitor id - a cookie value that is usually a
+ * numeric or random string, NOT a UUID. The visitor_id columns are UUID-typed,
+ * so a raw storefront id makes Postgres throw `invalid input syntax for type
+ * uuid`, and in an async handler that surfaces as an unhandledRejection which
+ * hangs the whole request (no response -> nginx 504 -> storefront degrades to
+ * native search, never reaching the model). Normalise any incoming id to a
+ * valid UUID: pass real UUIDs through untouched, and map everything else to a
+ * DETERMINISTIC v5-style UUID so the same browser keeps one stable identity and
+ * personalisation + attribution still work.
+ */
+function hyphenate32(hex) {
+  return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) +
+    '-' + hex.slice(16, 20) + '-' + hex.slice(20, 32);
+}
+
+function normVisitorId(s) {
+  if (!s || typeof s !== 'string') return null;
+  const t = s.trim().toLowerCase();
+  if (!t) return null;
+  // Already a canonical hyphenated UUID -> pass through unchanged.
+  if (UUID_RE.test(t)) return t;
+  // SFCC's dw.util.UUIDUtils.createUUID() returns 32 hex chars with NO hyphens.
+  // Postgres accepts that form as a uuid and stores the hyphenated canonical, so
+  // this is the identity SFCC has ALWAYS used. Re-hyphenate to that exact value
+  // so existing SFCC visitor profiles/attribution keep matching - do NOT remap it.
+  if (/^[0-9a-f]{32}$/.test(t)) return hyphenate32(t);
+  // Anything else (e.g. a Shopify numeric cookie) was never a valid uuid and
+  // would have crashed the query before. Map it to a DETERMINISTIC v5-style UUID
+  // so the same browser keeps one stable identity from now on.
+  const h = crypto.createHash('sha1').update('algivo:visitor:' + t).digest('hex');
+  return (
+    h.slice(0, 8) + '-' + h.slice(8, 12) + '-5' + h.slice(13, 16) + '-' +
+    ((parseInt(h[16], 16) & 0x3 | 0x8).toString(16)) + h.slice(17, 20) + '-' +
+    h.slice(20, 32)
+  );
+}
+
 async function loadPolicy(siteId) {
   const { rows } = await pool.query(
     `SELECT (cache_policy($1)).*, candidate_limit_for($1) AS candidate_limit`, [siteId]);
@@ -35,8 +76,10 @@ async function loadTaxonomy(siteId, locale) {
 }
 
 router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (req, res) => {
+ try {
   const { tenant_id: tenantId, site_id: siteId } = req.algivo;
   const { q, locale, currency, priorIntent, visitorId } = req.body || {};
+  const vid = normVisitorId(visitorId);
 
   if (!q || typeof q !== 'string') {
     return res.json({ ok: false, error: 'empty_query' });
@@ -65,11 +108,11 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
    * uses a profile skips the cache in both directions.
    */
   let styleVector = null;
-  if (visitorId) {
+  if (vid) {
     const { rows: prof } = await withTenant(tenantId, (c) => c.query(
       `SELECT style_vector, click_count FROM visitor_profiles
         WHERE tenant_id=$1 AND visitor_id=$2 AND style_vector IS NOT NULL`,
-      [tenantId, visitorId]));
+      [tenantId, vid]));
     // Below a handful of clicks there is nothing reliable to learn.
     if (prof[0] && prof[0].click_count >= 3) styleVector = prof[0].style_vector;
   }
@@ -213,7 +256,7 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
     `INSERT INTO visitor_events (tenant_id, visitor_id, site_id, kind,
         query_token, payload)
      VALUES ($1,$2,$3,'query',$4,$5::jsonb)`,
-    [tenantId, visitorId || '00000000-0000-0000-0000-000000000000', siteId,
+    [tenantId, vid || NIL_UUID, siteId,
      token, JSON.stringify({ q, relaxed: relaxed || null, cached })]))
     .catch((e) => rid.error('query.event_failed', { err: e && e.message }));
 
@@ -234,6 +277,15 @@ router.post('/query', versionGate, requireKey('publishable'), rateLimit, async (
     // an expensive one.
     environment: req.algivo.environment
   });
+ } catch (e) {
+   // Belt-and-braces: nothing in this handler may become an unhandledRejection.
+   // An uncaught error here used to hang the request forever (no response ->
+   // nginx 504). Log it and return a soft-fail so the storefront degrades to
+   // native search instead of stalling the shopper.
+   rid.error('query.unhandled', { err: e && e.message,
+     stack: e && e.stack });
+   if (!res.headersSent) res.json({ ok: false, error: 'error' });
+ }
 });
 
 module.exports = router;

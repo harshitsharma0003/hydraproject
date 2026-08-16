@@ -30,6 +30,9 @@ app.use(rid.middleware);
 // express.raw() and reads req.body as a Buffer.
 app.use((req, res, next) => {
   if (req.originalUrl === '/v1/billing/webhook') return next();
+  // Shopify webhooks verify HMAC against the exact raw bytes; the shopify router
+  // applies its own express.raw() for that path.
+  if (req.originalUrl.startsWith('/shopify/webhooks')) return next();
   express.json({ limit: '8mb' })(req, res, next);   // sync batches
 });
 app.use(cors({
@@ -54,6 +57,10 @@ app.use('/api', require('./routes/reset'));
 app.use('/api', require('./routes/users'));
 app.use('/api', require('./routes/portal').router);
 app.use('/api', require('./routes/admin').router);
+
+// Shopify integration (OAuth + webhooks + App Proxy). Only ADDS /shopify/*;
+// does not touch /v1/* so SFCC is unaffected.
+app.use('/shopify', require('./routes/shopify'));
 
 app.use((err, req, res, next) => {
   rid.error('unhandled', { err: err.message, stack: err.stack, path: req.path });
