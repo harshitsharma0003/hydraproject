@@ -66,20 +66,38 @@ router.get('/console/rules', requireConsole, rbac.require('rules:read'), async (
 });
 
 router.post('/console/rules', requireConsole, rbac.require('rules:write'), rbac.requireSite, async (req, res) => {
-  const { siteId, kind, masterId, attrMatch, queryPattern, multiplier,
+  try {
+    let { siteId, kind, masterId, attrMatch, queryPattern, multiplier,
           pinPosition, reason, expiresAt } = req.body || {};
-  await withTenant(req.user.tenant_id, (c) => c.query(
-    `INSERT INTO merch_rules (tenant_id, site_id, kind, master_id, attr_match,
-        query_pattern, multiplier, pin_position, reason, created_by, expires_at)
-     VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11)`,
-    [req.user.tenant_id, siteId, kind, masterId || null,
-     attrMatch ? JSON.stringify(attrMatch) : null, queryPattern || null,
-     multiplier || 1.0, pinPosition || null, reason || null,
-     req.user.email, expiresAt || null]));
-  // Rules change ranking, so cached candidate lists are now wrong.
-  await withTenant(req.user.tenant_id, (c) => c.query(
-    'DELETE FROM query_cache WHERE tenant_id=$1', [req.user.tenant_id]));
-  res.json({ ok: true });
+    // The console UI may not pass a site; default to this tenant's site so the
+    // NOT NULL site_id constraint is satisfied (rules are tenant-scoped in the
+    // console view regardless). Without this the insert threw and the request
+    // hung (unhandledRejection -> nginx 504) instead of saving.
+    if (!siteId) {
+      const s = await pool.query(
+        'SELECT id FROM sites WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 1',
+        [req.user.tenant_id]);
+      siteId = s.rows[0] && s.rows[0].id;
+    }
+    if (!siteId) return res.status(400).json({ ok: false, error: 'no_site_for_tenant' });
+    if (!kind) return res.status(400).json({ ok: false, error: 'missing_kind' });
+    if (!masterId && !attrMatch) return res.status(400).json({ ok: false, error: 'rule_needs_product_or_attribute' });
+
+    await withTenant(req.user.tenant_id, (c) => c.query(
+      `INSERT INTO merch_rules (tenant_id, site_id, kind, master_id, attr_match,
+          query_pattern, multiplier, pin_position, reason, created_by, expires_at)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9,$10,$11)`,
+      [req.user.tenant_id, siteId, kind, masterId || null,
+       attrMatch ? JSON.stringify(attrMatch) : null, queryPattern || null,
+       multiplier || 1.0, pinPosition || null, reason || null,
+       req.user.email, expiresAt || null]));
+    // Rules change ranking, so cached candidate lists are now wrong.
+    await withTenant(req.user.tenant_id, (c) => c.query(
+      'DELETE FROM query_cache WHERE tenant_id=$1', [req.user.tenant_id]));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
 });
 
 router.delete('/console/rules/:id', requireConsole, rbac.require('rules:write'), async (req, res) => {
