@@ -69,7 +69,11 @@ export default function Billing() {
         {Object.entries(data.plans).filter(([k]) => k !== 'trial').map(([k, p]) => (
           <div className="plan" key={k}>
             <h3>{p.label}</h3>
-            <div className="price">{usd(p.fee)}<span>/month</span></div>
+            <div className="price">
+              <span style={{ textDecoration: 'line-through', opacity: 0.45, fontWeight: 400, marginRight: 8 }}>{usd(p.fee * 2)}</span>
+              {usd(p.fee)}<span>/month</span>
+              <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#0f6e56', background: '#e1f5ee', borderRadius: 999, padding: '2px 8px', verticalAlign: 'middle' }}>50% off</span>
+            </div>
             <p className="muted">{p.included.toLocaleString()} queries included</p>
             <button disabled={busy} onClick={() => requestPlan(p.label)}>
               Request {p.label}

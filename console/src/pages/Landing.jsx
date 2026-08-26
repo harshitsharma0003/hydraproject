@@ -75,11 +75,11 @@ const BENEFITS = [
 ];
 
 const PLANS = [
-  { id: 'starter', name: 'Basic', price: '$200', queries: '50,000',
+  { id: 'starter', name: 'Basic', price: '$200', was: '$400', queries: '50,000',
     features: ['Dedicated VM — up to 2.5L SKUs', 'Sandbox + production', '$0.01 / extra query', 'Email support'] },
-  { id: 'growth', name: 'Growth', price: '$400', queries: '250,000', featured: true,
+  { id: 'growth', name: 'Growth', price: '$400', was: '$800', queries: '250,000', featured: true,
     features: ['Dedicated high-performance VM — up to 5L SKUs', 'Sandbox, UAT + production', 'AI narration', '$0.008 / extra query', 'Developer & integration support'] },
-  { id: 'enterprise', name: 'Enterprise', price: '$800', queries: '1,000,000+',
+  { id: 'enterprise', name: 'Enterprise', price: '$800', was: '$1,600', queries: '1,000,000+',
     features: ['Dedicated + HA infrastructure', 'AI narration + tuned models', '$0.005 / extra query', 'Dedicated engineer + SLA'] }
 ];
 
@@ -276,7 +276,11 @@ export default function Landing() {
             <div className={`lp-plan ${p.featured ? 'featured' : ''}`} key={p.id}>
               {p.featured && <span className="lp-plan-tag">Most popular</span>}
               <h3>{p.name}</h3>
-              <div className="lp-price">{p.price}{p.price !== 'Custom' && <span>/mo</span>}</div>
+              <div className="lp-price">
+                {p.was && <span style={{ textDecoration: 'line-through', opacity: 0.45, fontWeight: 400, marginRight: 8 }}>{p.was}</span>}
+                {p.price}{p.price !== 'Custom' && <span>/mo</span>}
+                {p.was && <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#0f6e56', background: '#e1f5ee', borderRadius: 999, padding: '2px 8px', verticalAlign: 'middle' }}>50% off</span>}
+              </div>
               <p className="lp-sub">{p.queries} production queries included</p>
               <ul>{p.features.map((f) => <li key={f}>{f}</li>)}</ul>
               <button type="button" onClick={() => pickPlan(p.name)}
