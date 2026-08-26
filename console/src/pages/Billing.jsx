@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 
-const inr = (micros) => '₹' + Math.round(micros / 1000000).toLocaleString('en-IN');
+const usd = (micros) => '$' + Math.round(micros / 1000000).toLocaleString('en-US');
 
 export default function Billing() {
   const [data, setData] = useState(null);
@@ -46,11 +46,11 @@ export default function Billing() {
             <div className="metric">
               <span>Overage</span>
               <strong>{Number(current.overage_queries).toLocaleString()}</strong>
-              <small>{inr(current.overage_micros)}</small>
+              <small>{usd(current.overage_micros)}</small>
             </div>
             <div className="metric">
               <span>Estimated total</span>
-              <strong>{inr(Number(current.platform_fee_micros) + Number(current.overage_micros))}</strong>
+              <strong>{usd(Number(current.platform_fee_micros) + Number(current.overage_micros))}</strong>
               <small>plus GST</small>
             </div>
           </div>
@@ -69,7 +69,7 @@ export default function Billing() {
         {Object.entries(data.plans).filter(([k]) => k !== 'trial').map(([k, p]) => (
           <div className="plan" key={k}>
             <h3>{p.label}</h3>
-            <div className="price">{inr(p.fee)}<span>/month</span></div>
+            <div className="price">{usd(p.fee)}<span>/month</span></div>
             <p className="muted">{p.included.toLocaleString()} queries included</p>
             <button disabled={busy} onClick={() => requestPlan(p.label)}>
               Request {p.label}
@@ -89,7 +89,7 @@ export default function Billing() {
             <tr key={i.period}>
               <td>{new Date(i.period).toLocaleDateString(undefined,
                    { year: 'numeric', month: 'long' })}</td>
-              <td>{inr(i.total_micros)}</td>
+              <td>{usd(i.total_micros)}</td>
               <td><span className={`badge ${i.status === 'paid' ? 'on' : ''}`}>{i.status}</span></td>
             </tr>
           ))}

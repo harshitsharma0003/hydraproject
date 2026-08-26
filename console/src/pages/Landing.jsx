@@ -75,12 +75,12 @@ const BENEFITS = [
 ];
 
 const PLANS = [
-  { id: 'starter', name: 'Basic', price: '₹50,000', queries: '50,000',
-    features: ['Dedicated VM — up to 2.5L SKUs', 'Sandbox + production', '₹0.50 / extra query', 'Email support'] },
-  { id: 'growth', name: 'Growth', price: '₹1,50,000', queries: '250,000', featured: true,
-    features: ['Dedicated high-performance VM — up to 5L SKUs', 'Sandbox, UAT + production', 'AI narration', '₹0.35 / extra query', 'Developer & integration support'] },
-  { id: 'enterprise', name: 'Enterprise', price: 'Custom', queries: '1,000,000+',
-    features: ['Dedicated + HA infrastructure', 'AI narration + tuned models', '₹0.25 / extra query', 'Dedicated engineer + SLA'] }
+  { id: 'starter', name: 'Basic', price: '$200', queries: '50,000',
+    features: ['Dedicated VM — up to 2.5L SKUs', 'Sandbox + production', '$0.01 / extra query', 'Email support'] },
+  { id: 'growth', name: 'Growth', price: '$400', queries: '250,000', featured: true,
+    features: ['Dedicated high-performance VM — up to 5L SKUs', 'Sandbox, UAT + production', 'AI narration', '$0.008 / extra query', 'Developer & integration support'] },
+  { id: 'enterprise', name: 'Enterprise', price: '$800', queries: '1,000,000+',
+    features: ['Dedicated + HA infrastructure', 'AI narration + tuned models', '$0.005 / extra query', 'Dedicated engineer + SLA'] }
 ];
 
 function Icon({ name }) {

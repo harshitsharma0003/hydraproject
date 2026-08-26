@@ -10,11 +10,14 @@ const router = express.Router();
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 
+// Fees are in micros of the display currency (USD): 1 unit = $1, so
+// 200000000 micros = $200. Billing is sales-led — these drive the plan
+// cards shown in the console/landing page, not an automatic card charge.
 const PLANS = {
-  trial:      { fee: 0,          included: 0,       label: 'Trial' },
-  starter:    { fee: 18000000000, included: 40000,  label: 'Starter' },
-  growth:     { fee: 65000000000, included: 250000, label: 'Growth' },
-  enterprise: { fee: 225000000000, included: 1000000, label: 'Enterprise' }
+  trial:      { fee: 0,         included: 0,       label: 'Trial' },
+  starter:    { fee: 200000000, included: 40000,   label: 'Starter' },
+  growth:     { fee: 400000000, included: 250000,  label: 'Growth' },
+  enterprise: { fee: 800000000, included: 1000000, label: 'Enterprise' }
 };
 
 const rbac = require('../rbac');
