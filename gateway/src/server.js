@@ -45,6 +45,7 @@ app.get('/health', (req, res) =>
 
 // Contract is versioned so a gateway deploy cannot break a cartridge in the field.
 app.use('/v1', require('./routes/query'));
+app.use('/v1', require('./routes/listsearch'));
 app.use('/v1', require('./routes/refine'));
 app.use('/v1', require('./routes/narrate'));
 app.use('/v1', require('./routes/sync'));

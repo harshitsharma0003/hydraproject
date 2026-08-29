@@ -182,6 +182,8 @@ async function proxyForward(req, res, gatewayPath) {
 }
 router.post('/proxy/query', (req, res) => proxyForward(req, res, '/v1/query'));
 router.post('/proxy/event', (req, res) => proxyForward(req, res, '/v1/event'));
+// B2B list/file upload search — gated on the tenant being B2B in the gateway.
+router.post('/proxy/list-search', (req, res) => proxyForward(req, res, '/v1/list-search'));
 
 /* ── Embedded admin UI + its API (session-token auth) ─────────────────────── */
 router.get('/app', (req, res) => {
