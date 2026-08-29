@@ -4,7 +4,7 @@ import { api } from '../api';
 
 export default function Signup() {
   const [form, setForm] = useState({ email: '', password: '', company: '',
-                                     platform: 'sfcc_sfra' });
+                                     platform: 'sfcc_sfra', accountType: 'b2c' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [params] = useSearchParams();
@@ -40,6 +40,12 @@ export default function Signup() {
         </label>
         <label>Company
           <input type="text" value={form.company} onChange={set('company')} />
+        </label>
+        <label>Store type
+          <select value={form.accountType} onChange={set('accountType')}>
+            <option value="b2c">B2C — selling to shoppers</option>
+            <option value="b2b">B2B — selling to businesses / trade</option>
+          </select>
         </label>
         <label>Platform
           <select value={form.platform} onChange={set('platform')}>

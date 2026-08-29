@@ -16,9 +16,12 @@ router.post('/console/login', async (req, res) => {
   const { email, password } = req.body || {};
 
   const { rows: [candidate] } = await pool.query(
-    `SELECT id, tenant_id, email, role, status, locked_until, failed_logins,
-            password_hash = crypt($2, password_hash) AS password_ok
-       FROM console_users WHERE email = $1`, [email, password || '']);
+    `SELECT cu.id, cu.tenant_id, cu.email, cu.role, cu.status, cu.locked_until,
+            cu.failed_logins, t.account_type,
+            cu.password_hash = crypt($2, cu.password_hash) AS password_ok
+       FROM console_users cu
+       JOIN tenants t ON t.id = cu.tenant_id
+      WHERE cu.email = $1`, [email, password || '']);
 
   // Same response for every failure mode - a distinct "account locked" message
   // tells an attacker which addresses are real.
@@ -47,7 +50,8 @@ router.post('/console/login', async (req, res) => {
   rbac.audit({ user: candidate, ip: req.ip, get: (h) => req.get(h) }, 'user.login');
 
   res.json({ ok: true, token: rbac.issueToken(candidate.id),
-             email: candidate.email, role: candidate.role });
+             email: candidate.email, role: candidate.role,
+             accountType: candidate.account_type || 'b2c' });
 });
 
 router.get('/console/sites', requireConsole, rbac.require('sites:read'), async (req, res) => {

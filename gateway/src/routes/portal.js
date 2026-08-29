@@ -31,10 +31,13 @@ const requireConsole = rbac.authenticate;
  * ------------------------------------------------------------------ */
 
 router.post('/signup', async (req, res) => {
-  const { email, password, company, platform = 'sfcc_sfra', country = 'IN' } = req.body || {};
+  const { email, password, company, platform = 'sfcc_sfra', country = 'IN',
+          accountType = 'b2c' } = req.body || {};
   if (!email || !password || password.length < 10) {
     return res.status(400).json({ ok: false, error: 'weak_password' });
   }
+  // Only two account types; anything else falls back to the safe default.
+  const acct = accountType === 'b2b' ? 'b2b' : 'b2c';
 
   const { rows: dup } = await pool.query(
     'SELECT 1 FROM console_users WHERE email = $1', [email]);
@@ -51,8 +54,8 @@ router.post('/signup', async (req, res) => {
   });
 
   await pool.query(
-    `UPDATE tenants SET contact_email=$2, company=$3, country=$4 WHERE id=$1`,
-    [result.tenantId, email, company || null, country]);
+    `UPDATE tenants SET contact_email=$2, company=$3, country=$4, account_type=$5 WHERE id=$1`,
+    [result.tenantId, email, company || null, country, acct]);
 
   await pool.query(
     `INSERT INTO console_users (tenant_id, email, password_hash, role, name)
@@ -170,8 +173,12 @@ router.get('/environments', requireConsole, rbac.require('sites:read'), async (r
        FROM licenses WHERE tenant_id=$1 AND status IN ('active','past_due')
       LIMIT 1`, [req.user.tenant_id]);
 
+  const { rows: [ten] } = await pool.query(
+    'SELECT account_type FROM tenants WHERE id=$1', [req.user.tenant_id]);
+
   res.json({
     ok: true,
+    accountType: ten?.account_type || 'b2c',
     license: lic || null,
     environments: detail.rows.map((e) => ({
       ...e,
