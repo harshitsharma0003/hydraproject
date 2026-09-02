@@ -56,6 +56,30 @@ const DEMOS = [
       { n: 'Rugged Waterproof', p: '₹10,400', h: 180 },
       { n: 'Ridge Runner GTX', p: '₹13,500', h: 158 }
     ]
+  },
+  {
+    q: 'need 15 bags of Knauf MP75 for pickup in Amsterdam',
+    chips: ['Trade order', 'Qty · 15 bags', 'Pickup · nearby branch', 'In stock today'],
+    tiles: [
+      { n: 'Knauf MP75 25kg', p: '€18.90', h: 210 },
+      { n: 'MP75 — full pallet', p: '€742.00', h: 150 },
+      { n: 'Knauf Rotband 25kg', p: '€16.40', h: 40 },
+      { n: 'Betokontakt primer', p: '€34.50', h: 200 },
+      { n: 'OSB board 18mm', p: '€22.40', h: 60 },
+      { n: 'Cement grey 25kg', p: '€6.75', h: 30 }
+    ]
+  },
+  {
+    q: 'upload our bill of materials for the job',
+    chips: ['Order by list', 'Excel · PDF · photo', 'Per-line match', 'Bulk to cart'],
+    tiles: [
+      { n: 'OSB board 18mm', p: '€22.40', h: 60 },
+      { n: 'Cement grey 25kg', p: '€6.75', h: 30 },
+      { n: 'Rockwool slab 100mm', p: '€9.20', h: 120 },
+      { n: 'Gypsum board 12.5mm', p: '€9.75', h: 90 },
+      { n: 'Construction screws', p: '€18.60', h: 20 },
+      { n: 'Makita drill set', p: '€34.95', h: 250 }
+    ]
   }
 ];
 
@@ -71,7 +95,11 @@ const BENEFITS = [
   { icon: 'spark', t: 'Personalised, safely',
     d: 'Rankings adapt to on-site behaviour — never leaking one shopper’s history to another, and never personalising a gift query.' },
   { icon: 'dial', t: 'Merchandiser control',
-    d: 'Ban, pin and boost products from the console. The model proposes; your team stays in charge of what customers see.' }
+    d: 'Ban, pin and boost products from the console. The model proposes; your team stays in charge of what customers see.' },
+  { icon: 'grid', t: 'Order by list (B2B)',
+    d: 'Professional buyers upload their order — Excel, PDF or a photo of a handwritten list — and every line is matched to your catalogue, ready to add in bulk.' },
+  { icon: 'bolt', t: 'Buy by task (B2B)',
+    d: 'Ask by quantity, branch and deadline — "15 bags for pickup today" — and get live availability, tiered pricing and pickup, not a wall of links.' }
 ];
 
 const PLANS = [
@@ -146,12 +174,13 @@ export default function Landing() {
 
       <section className="lp-hero">
         <div className="lp-hero-copy">
-          <span className="lp-eyebrow">AI merchandising for SFCC &amp; Shopify</span>
-          <h1>Your shoppers describe what they want.<br /><em>Algivo builds the page.</em></h1>
+          <span className="lp-eyebrow">AI shopping experience for B2C &amp; B2B · SFCC &amp; Shopify</span>
+          <h1>Your customers describe what they want.<br /><em>Algivo builds the page.</em></h1>
           <p>
             Natural-language search that returns a curated PLP — rendered through
-            your own product tiles, your live prices, your real stock. Nothing to
-            restyle, nothing that can take your storefront down.
+            your own product tiles, your live prices, your real stock. For consumer
+            shoppers and professional buyers alike. Nothing to restyle, nothing that
+            can take your storefront down.
           </p>
           <div className="lp-hero-cta">
             <Link to="/signup" className="lp-btn big">Start free with a sandbox</Link>
@@ -195,11 +224,28 @@ export default function Landing() {
 
       <section className="lp-logos">
         <span>Renders through</span>
-        <strong>Salesforce B2C Commerce (SFRA)</strong>
+        <strong>Salesforce Commerce (B2C &amp; B2B)</strong>
         <span className="lp-sep">·</span>
         <strong>Shopify</strong>
         <span className="lp-sep">·</span>
         <span>your templates, unchanged</span>
+      </section>
+
+      <section className="lp-section">
+        <h2 className="lp-h2">One platform, two kinds of buyer</h2>
+        <p className="lp-sub">The same AI experience, tuned to how each of your customers actually buys.</p>
+        <div className="lp-how">
+          <div className="lp-how-step">
+            <span style={{ display: 'inline-block', fontSize: 12, fontWeight: 600, color: '#5433C8', background: '#efeef9', borderRadius: 999, padding: '4px 12px', marginBottom: 12 }}>B2C · Consumers</span>
+            <h3>Shoppers describe a moment</h3>
+            <p>“An outfit for a summer wedding.” “A gift for my mum under ₹3,000.” They type intent and get a curated PLP in your own tiles — with gifting and personalisation handled right.</p>
+          </div>
+          <div className="lp-how-step">
+            <span style={{ display: 'inline-block', fontSize: 12, fontWeight: 600, color: '#5433C8', background: '#efeef9', borderRadius: 999, padding: '4px 12px', marginBottom: 12 }}>B2B · Professionals</span>
+            <h3>Buyers procure by list &amp; spec</h3>
+            <p>They upload an order — Excel, PDF or a photo — and every line is matched; or ask by task, quantity and branch and get live availability and pickup. Tiered pricing built in.</p>
+          </div>
+        </div>
       </section>
 
       <section id="benefits" className="lp-section">
