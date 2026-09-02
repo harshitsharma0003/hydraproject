@@ -20,10 +20,11 @@ export default function Syncs() {
 
   return (
     <section>
-      <h1>Catalog syncs</h1>
+      <h1>Catalog, price &amp; inventory syncs</h1>
       <p className="muted">
-        Products stay searchable throughout a sync. Existing embeddings are
-        replaced one batch at a time rather than cleared upfront.
+        Your catalogue, prices and inventory stay in sync. Products remain
+        searchable throughout — embeddings are replaced one batch at a time,
+        never cleared upfront.
       </p>
 
       <table>

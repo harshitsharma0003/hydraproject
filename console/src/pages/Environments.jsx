@@ -129,8 +129,8 @@ export default function Environments() {
           action: { label: 'See plans', fn: () => nav('/billing') } },
     { done: connected, title: 'Connect your storefront',
       desc: 'Install the cartridge (SFCC) or the app (Shopify), paste the keys above, and point it at your gateway URL.' },
-    { done: masters > 0, title: 'Sync your catalog',
-      desc: 'Upload your catalog over SFTP. Discovery embeds it in the background — prices and stock never leave your instance.' }
+    { done: masters > 0, title: 'Sync your catalog, prices & inventory',
+      desc: 'Push your catalogue, price tiers and branch inventory. Discovery embeds it in the background.' }
   ];
   const doneCount = steps.filter((s) => s.done).length;
   const allDone = doneCount === steps.length;
