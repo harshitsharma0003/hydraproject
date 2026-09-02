@@ -7,9 +7,12 @@
 -- intent). It lives on the tenant so both the console portal and the query
 -- pipeline can branch on a single source of truth.
 
-ALTER TABLE tenants
+-- Schema-qualified: the migration runner connects without `algivo` on its
+-- search_path, so an unqualified `tenants` is not found even though
+-- algivo.tenants exists.
+ALTER TABLE algivo.tenants
   ADD COLUMN IF NOT EXISTS account_type text NOT NULL DEFAULT 'b2c';
 
-ALTER TABLE tenants DROP CONSTRAINT IF EXISTS tenants_account_type_chk;
-ALTER TABLE tenants
+ALTER TABLE algivo.tenants DROP CONSTRAINT IF EXISTS tenants_account_type_chk;
+ALTER TABLE algivo.tenants
   ADD CONSTRAINT tenants_account_type_chk CHECK (account_type IN ('b2b', 'b2c'));
